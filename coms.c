@@ -20,6 +20,16 @@
 
 #define BUF_SIZE 5
 
+enum states
+{
+    START,
+    FLAG_RCV,
+    A_RCV,
+    C_RCV,
+    BCC_OK,
+    STOPSTOP,
+};
+
 volatile int STOP = FALSE;
 
 int send(int fd)
@@ -46,29 +56,118 @@ int send(int fd)
 
 int receive(int fd)
 {
-
-    // Loop for input
-    unsigned char receive_buf[BUF_SIZE] = {0}; // +1: Save space for the final '\0' char
-
-    while (STOP == FALSE)
+    unsigned char a_rcv;
+    unsigned char c_rcv;
+    enum states current_state = START;
+    while (current_state != STOPSTOP)
     {
-        // Returns after 5 chars have been input
-        int bytes = read(fd, receive_buf, BUF_SIZE);
-
-        if (receive_buf[4] == 0x7E)
-            STOP = TRUE;
+        if (current_state == START)
+        {
+            unsigned char byte[1] = {0};
+            read(fd, byte, 1);
+            if (byte[0] == 0x7E)
+            {
+                current_state = FLAG_RCV;
+            }
+            else
+            {
+                printf("Received error!");
+            }
+        }
+        if (current_state == FLAG_RCV)
+        {
+            unsigned char byte[1] = {0};
+            read(fd, byte, 1);
+            a_rcv = byte[0];
+            if (byte[0] == 0x03 || byte[0] == 0x01)
+            {
+                current_state = A_RCV;
+            }
+            else if (byte[0] != 0x7E)
+            {
+                current_state = START;
+            }
+            else
+            {
+                printf("Received a flag");
+            }
+        }
+        if (current_state == A_RCV)
+        {
+            unsigned char byte[1] = {0};
+            read(fd, byte, 1);
+            c_rcv = byte[0]; 
+            if (byte[0] == 0x7E)
+            {
+                current_state = FLAG_RCV;
+            }
+            else if (byte[0] == 0x03 || byte[0] == 0x07)
+            {
+                current_state = C_RCV;
+            }
+            else
+            {
+                printf("Received trash!");
+                current_state = START;
+            }
+        }
+        if (current_state == C_RCV)
+        {
+            unsigned char byte[1] = {0};
+            read(fd, byte, 1);
+            if (byte[0] == 0x7E)
+            {
+                current_state = FLAG_RCV;
+            }
+            else if (byte[0] == (a_rcv ^ c_rcv))
+            {
+                current_state = BCC_OK;
+            }
+            else
+            {
+                printf("Received trash!");
+                current_state = START;
+            }
+        }
+        if (current_state == BCC_OK)
+        {
+            unsigned char byte[1] = {0};
+            read(fd, byte, 1);
+            if (byte[0] == 0x7E)
+            {
+                current_state = FLAG_RCV;
+            }
+            else
+            {
+                current_state = START;
+                printf("Received trash!");
+            }
+        }
     }
-
-    for (int i = 0; i < 5; i++)
-    {
-        printf("%x\n", receive_buf[i]);
-    }
-
-    if (receive_buf[1] ^ receive_buf[2] != receive_buf[3])
-    {
-        perror("Tas todo cego irmon");
-    }
+    return;
 }
+
+// Loop for input
+// unsigned char receive_buf[BUF_SIZE] = {0}; // +1: Save space for the final '\0' char
+
+// while (STOP == FALSE)
+// {
+//     // Returns after 5 chars have been input
+//     int bytes = read(fd, receive_buf, BUF_SIZE);
+
+//     if (receive_buf[4] == 0x7E)
+//         STOP = TRUE;
+// }
+
+// for (int i = 0; i < 5; i++)
+// {
+//     printf("%x\n", receive_buf[i]);
+// }
+
+// if ((receive_buf[1] ^ receive_buf[2]) != receive_buf[3])
+// {
+//     perror("Error on byte validation");
+// }
 
 int main(int argc, char *argv[])
 {
