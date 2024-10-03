@@ -65,6 +65,9 @@ int receive(int fd)
         {
             unsigned char byte[1] = {0};
             read(fd, byte, 1);
+            printf("Entered START\n");
+            printf("READ %x\n", byte[0]);
+
             if (byte[0] == 0x7E)
             {
                 current_state = FLAG_RCV;
@@ -78,6 +81,8 @@ int receive(int fd)
         {
             unsigned char byte[1] = {0};
             read(fd, byte, 1);
+            printf("Entered FLAG_RCV\n");
+            printf("READ %x\n", byte[0]);
             a_rcv = byte[0];
             if (byte[0] == 0x03 || byte[0] == 0x01)
             {
@@ -96,7 +101,9 @@ int receive(int fd)
         {
             unsigned char byte[1] = {0};
             read(fd, byte, 1);
-            c_rcv = byte[0]; 
+            printf("Entered A_RCV\n");
+            printf("READ %x\n", byte[0]);
+            c_rcv = byte[0];
             if (byte[0] == 0x7E)
             {
                 current_state = FLAG_RCV;
@@ -115,6 +122,8 @@ int receive(int fd)
         {
             unsigned char byte[1] = {0};
             read(fd, byte, 1);
+            printf("Entered C_RCV\n");
+            printf("READ %x\n", byte[0]);
             if (byte[0] == 0x7E)
             {
                 current_state = FLAG_RCV;
@@ -133,9 +142,11 @@ int receive(int fd)
         {
             unsigned char byte[1] = {0};
             read(fd, byte, 1);
+            printf("Entered BCC_OK\n");
+            printf("READ %x\n", byte[0]);
             if (byte[0] == 0x7E)
             {
-                current_state = FLAG_RCV;
+                current_state = STOPSTOP;
             }
             else
             {
@@ -144,7 +155,8 @@ int receive(int fd)
             }
         }
     }
-    return;
+    printf("FINISH\n");
+    return 0;
 }
 
 // Loop for input
