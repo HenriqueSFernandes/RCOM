@@ -22,6 +22,54 @@
 
 volatile int STOP = FALSE;
 
+int send(int fd)
+{
+
+    // Create string to send
+    unsigned char F = 0x7E;
+    unsigned char A = 0x03;
+    unsigned char C = 0x03;
+    unsigned char BCC1 = A ^ C;
+
+    unsigned char buf[BUF_SIZE] = {F, A, C, BCC1, F};
+
+    // In non-canonical mode, '\n' does not end the writing.
+    // Test this condition by placing a '\n' in the middle of the buffer.
+    // The whole buffer must be sent even with the '\n'.
+
+    int bytes = write(fd, buf, BUF_SIZE);
+    printf("%d bytes written\n", bytes);
+
+    // Wait until all bytes have been written to the serial port
+    sleep(1);
+}
+
+int receive(int fd)
+{
+
+    // Loop for input
+    unsigned char receive_buf[BUF_SIZE] = {0}; // +1: Save space for the final '\0' char
+
+    while (STOP == FALSE)
+    {
+        // Returns after 5 chars have been input
+        int bytes = read(fd, receive_buf, BUF_SIZE);
+
+        if (receive_buf[4] == 0x7E)
+            STOP = TRUE;
+    }
+
+    for (int i = 0; i < 5; i++)
+    {
+        printf("%x\n", receive_buf[i]);
+    }
+
+    if (receive_buf[1] ^ receive_buf[2] != receive_buf[3])
+    {
+        perror("Tas todo cego irmon");
+    }
+}
+
 int main(int argc, char *argv[])
 {
     // Program usage: Uses either COM1 or COM2
@@ -88,45 +136,9 @@ int main(int argc, char *argv[])
 
     printf("New termios structure set\n");
 
-    // Create string to send
-    unsigned char F = 0x7E;
-    unsigned char A = 0x03;
-    unsigned char C = 0x03;
-    unsigned char BCC1 = A ^ C;
+    send(fd);
 
-    unsigned char buf[BUF_SIZE] = {F, A, C, BCC1, F};
-
-
-    // In non-canonical mode, '\n' does not end the writing.
-    // Test this condition by placing a '\n' in the middle of the buffer.
-    // The whole buffer must be sent even with the '\n'.
-
-    int bytes = write(fd, buf, BUF_SIZE);
-    printf("%d bytes written\n", bytes);
-
-    // Wait until all bytes have been written to the serial port
-    sleep(1);
-    
-    // Loop for input
-    unsigned char receive_buf[BUF_SIZE ] = {0}; // +1: Save space for the final '\0' char
-
-    while (STOP == FALSE)
-    {
-        // Returns after 5 chars have been input
-        int bytes = read(fd, receive_buf, BUF_SIZE);
-
-        if (receive_buf[4] == 0x7E)
-            STOP = TRUE;
-    }
-
-    for (int i = 0; i < 5; i++){
-        printf("%x\n", receive_buf[i]);
-    }
-
-    if (receive_buf[1] ^ receive_buf[2] != receive_buf[3]){
-        perror("Tas todo cego irmon");
-    }
-
+    receive(fd);
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
