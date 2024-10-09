@@ -2,6 +2,7 @@
 // Modified by: Eduardo Nuno Almeida [enalmeida@fe.up.pt]
 
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +21,8 @@
 
 #define BUF_SIZE 5
 
+int alarmEnabled = FALSE;
+int alarmCount = 0;
 enum states {
   START,
   FLAG_RCV,
@@ -31,8 +34,15 @@ enum states {
 
 volatile int STOP = FALSE;
 
+void alarmHandler(int signal) {
+  alarmEnabled = FALSE;
+  alarmCount++;
+
+  printf("Alarm #%d\n", alarmCount);
+}
 int send(int fd) {
 
+  sleep(5);
   // Create string to send
   unsigned char F = 0x7E;
   unsigned char A = 0x03;
