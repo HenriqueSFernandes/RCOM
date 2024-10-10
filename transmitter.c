@@ -128,7 +128,7 @@ void alarmHandler(int signal)
 {
   alarmEnabled = FALSE;
   alarmCount++;
-  printf("Alarm no:  %d", alarmCount);
+  printf("Alarm no:  %d \n", alarmCount);
   if (alarmCount < 4)
   {
     send();
