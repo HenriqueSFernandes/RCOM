@@ -25,7 +25,8 @@ int alarmCount = 0;
 int received = 0;
 int fd = 0;
 
-enum states {
+enum states
+{
   START,
   FLAG_RCV,
   A_RCV,
@@ -36,9 +37,8 @@ enum states {
 
 volatile int STOP = FALSE;
 
-int send() {
-  printf("setting alarm");
-  printf("after alarm");
+int send()
+{
 
   // Create string to send
   unsigned char F = 0x7E;
@@ -55,82 +55,105 @@ int send() {
   int bytes = write(fd, buf, BUF_SIZE);
   printf("%d bytes written\n", bytes);
 
-  alarm(3);
   // Wait until all bytes have been written to the serial port
+  alarm(3);
   return 0;
 }
 
-int receive() {
+int receive()
+{
   unsigned char a_rcv;
   unsigned char c_rcv;
   enum states current_state = START;
-  while (current_state != STOPSTOP) {
-    if (current_state == START) {
-      unsigned char byte[1] = {0};
-      read(fd, byte, 1);
-      printf("Entered START\n");
-      printf("READ %x\n", byte[0]);
+  while (current_state != STOPSTOP && alarmCount < 4)
+  {
+    unsigned char byte[1] = {0};
+    if (read(fd, byte, 1) != 0)
+    {
+      if (current_state == START)
+      {
+        printf("Entered START\n");
+        printf("READ %x\n", byte[0]);
 
-      if (byte[0] == 0x7E) {
-        current_state = FLAG_RCV;
-      } else {
-        printf("Received error!");
+        if (byte[0] == 0x7E)
+        {
+          current_state = FLAG_RCV;
+        }
+        else
+        {
+          printf("Received error!");
+        }
       }
-    }
-    if (current_state == FLAG_RCV) {
-      unsigned char byte[1] = {0};
-      read(fd, byte, 1);
-      printf("Entered FLAG_RCV\n");
-      printf("READ %x\n", byte[0]);
-      a_rcv = byte[0];
-      if (byte[0] == 0x03 || byte[0] == 0x01) {
-        current_state = A_RCV;
-      } else if (byte[0] != 0x7E) {
-        current_state = START;
-      } else {
-        printf("Received a flag");
+      else if (current_state == FLAG_RCV)
+      {
+        printf("Entered FLAG_RCV\n");
+        printf("READ %x\n", byte[0]);
+        a_rcv = byte[0];
+        if (byte[0] == 0x03 || byte[0] == 0x01)
+        {
+          current_state = A_RCV;
+        }
+        else if (byte[0] != 0x7E)
+        {
+          current_state = START;
+        }
+        else
+        {
+          printf("Received a flag");
+        }
       }
-    }
-    if (current_state == A_RCV) {
-      unsigned char byte[1] = {0};
-      read(fd, byte, 1);
-      printf("Entered A_RCV\n");
-      printf("READ %x\n", byte[0]);
-      c_rcv = byte[0];
-      if (byte[0] == 0x7E) {
-        current_state = FLAG_RCV;
-      } else if (byte[0] == 0x03 || byte[0] == 0x07) {
-        current_state = C_RCV;
-      } else {
-        printf("Received trash!");
-        current_state = START;
+      else if (current_state == A_RCV)
+      {
+        printf("Entered A_RCV\n");
+        printf("READ %x\n", byte[0]);
+        c_rcv = byte[0];
+        if (byte[0] == 0x7E)
+        {
+          current_state = FLAG_RCV;
+        }
+        else if (byte[0] == 0x03 || byte[0] == 0x07)
+        {
+          current_state = C_RCV;
+        }
+        else
+        {
+          printf("Received trash!");
+          current_state = START;
+        }
       }
-    }
-    if (current_state == C_RCV) {
-      unsigned char byte[1] = {0};
-      read(fd, byte, 1);
-      printf("Entered C_RCV\n");
-      printf("READ %x\n", byte[0]);
-      if (byte[0] == 0x7E) {
-        current_state = FLAG_RCV;
-      } else if (byte[0] == (a_rcv ^ c_rcv)) {
-        current_state = BCC_OK;
-      } else {
-        printf("Received trash!");
-        current_state = START;
+      else if (current_state == C_RCV)
+      {
+        printf("Entered C_RCV\n");
+        printf("READ %x\n", byte[0]);
+        if (byte[0] == 0x7E)
+        {
+          current_state = FLAG_RCV;
+        }
+        else if (byte[0] == (a_rcv ^ c_rcv))
+        {
+          current_state = BCC_OK;
+        }
+        else
+        {
+          printf("Received trash!");
+          current_state = START;
+        }
       }
-    }
-    if (current_state == BCC_OK) {
-      unsigned char byte[1] = {0};
-      read(fd, byte, 1);
-      printf("Entered BCC_OK\n");
-      printf("READ %x\n", byte[0]);
-      if (byte[0] == 0x7E) {
-        current_state = STOPSTOP;
-      } else {
-        current_state = START;
-        printf("Received trash!");
+      else if (current_state == BCC_OK)
+      {
+        printf("Entered BCC_OK\n");
+        printf("READ %x\n", byte[0]);
+        if (byte[0] == 0x7E)
+        {
+          current_state = STOPSTOP;
+        }
+        else
+        {
+          current_state = START;
+          printf("Received trash!");
+        }
       }
+      byte[0] = 0;
     }
   }
   printf("FINISH\n");
@@ -138,20 +161,25 @@ int receive() {
   return 0;
 }
 
-void alarmHandler(int signal) {
+void alarmHandler(int signal)
+{
   alarmEnabled = FALSE;
   alarmCount++;
-  if (alarmCount < 3) {
+  printf("line 170 %d", alarmCount);
+  if (alarmCount < 4)
+  {
     send();
-    alarm(3);
-  } else {
-    perror("merdou");
+  }
+  else
+  {
+    perror("error");
   }
 
   printf("Alarm #%d\n", alarmCount);
 }
 
-void subscribeAlarm() {
+void subscribeAlarm()
+{
 
   (void)signal(SIGALRM, alarmHandler);
 
@@ -163,11 +191,13 @@ void subscribeAlarm() {
   // }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
   // Program usage: Uses either COM1 or COM2
   const char *serialPortName = argv[1];
 
-  if (argc < 2) {
+  if (argc < 2)
+  {
     printf("Incorrect program usage\n"
            "Usage: %s <SerialPort>\n"
            "Example: %s /dev/ttyS1\n",
@@ -179,7 +209,8 @@ int main(int argc, char *argv[]) {
   // because we don't want to get killed if linenoise sends CTRL-C.
   fd = open(serialPortName, O_RDWR | O_NOCTTY);
 
-  if (fd < 0) {
+  if (fd < 0)
+  {
     perror(serialPortName);
     exit(-1);
   }
@@ -188,7 +219,8 @@ int main(int argc, char *argv[]) {
   struct termios newtio;
 
   // Save current port settings
-  if (tcgetattr(fd, &oldtio) == -1) {
+  if (tcgetattr(fd, &oldtio) == -1)
+  {
     perror("tcgetattr");
     exit(-1);
   }
@@ -203,7 +235,7 @@ int main(int argc, char *argv[]) {
   // Set input mode (non-canonical, no echo,...)
   newtio.c_lflag = 0;
   newtio.c_cc[VTIME] = 0; // Inter-character timer unused
-  newtio.c_cc[VMIN] = 5;  // Blocking read until 5 chars received
+  newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
 
   // VTIME e VMIN should be changed in order to protect with a
   // timeout the reception of the following character(s)
@@ -216,7 +248,8 @@ int main(int argc, char *argv[]) {
   tcflush(fd, TCIOFLUSH);
 
   // Set new port settings
-  if (tcsetattr(fd, TCSANOW, &newtio) == -1) {
+  if (tcsetattr(fd, TCSANOW, &newtio) == -1)
+  {
     perror("tcsetattr");
     exit(-1);
   }
@@ -233,7 +266,8 @@ int main(int argc, char *argv[]) {
   printf("received");
 
   // Restore the old port settings
-  if (tcsetattr(fd, TCSANOW, &oldtio) == -1) {
+  if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+  {
     perror("tcsetattr");
     exit(-1);
   }
