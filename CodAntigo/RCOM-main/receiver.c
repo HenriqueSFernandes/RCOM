@@ -121,7 +121,7 @@ int receive(int fd) {
         printf("Received trash!");
         current_state = START;
       }
-    }
+    }// TODO
     if (current_state == BCC_OK) {
       unsigned char byte[1] = {0};
       read(fd, byte, 1);

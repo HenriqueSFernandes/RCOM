@@ -20,8 +20,8 @@
 #define TRUE 1
 
 #define BUF_SIZE 5
-int alarmEnabled = FALSE;
-int alarmCount = 0;
+// int alarmEnabled = FALSE;
+// int alarmCount = 0;
 int received = 0;
 int fd = 0;
 
