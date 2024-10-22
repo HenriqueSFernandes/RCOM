@@ -16,4 +16,5 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     linkLayer.role = (!strcmp(role, "tx")) ? LlTx : LlRx;
     printf("%s\n\n\n", linkLayer.serialPort);
     llopen(linkLayer);
+    (!strcmp(role, "tx")) ? llwrite((const unsigned char *)"ola", 3) : llread((unsigned char *)"a");
 }

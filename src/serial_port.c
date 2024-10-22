@@ -14,7 +14,7 @@
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
 
-int fd = -1;           // File descriptor for open serial port
+int fdd = -1;           // File descriptor for open serial port
 struct termios oldtio; // Serial port settings to restore on closing
 
 // Open and configure the serial port.
@@ -24,15 +24,15 @@ int openSerialPort(const char *serialPort, int baudRate)
     // Open with O_NONBLOCK to avoid hanging when CLOCAL
     // is not yet set on the serial port (changed later)
     int oflags = O_RDWR | O_NOCTTY | O_NONBLOCK;
-    fd = open(serialPort, oflags);
-    if (fd < 0)
+    fdd = open(serialPort, oflags);
+    if (fdd < 0)
     {
         perror(serialPort);
         return -1;
     }
 
     // Save current port settings
-    if (tcgetattr(fd, &oldtio) == -1)
+    if (tcgetattr(fdd, &oldtio) == -1)
     {   
         perror("tcgetattr");
         return -1;
@@ -87,27 +87,27 @@ int openSerialPort(const char *serialPort, int baudRate)
     newtio.c_cc[VTIME] = 0; // Block reading
     newtio.c_cc[VMIN] = 0;  // Byte by byte se fosse 1, como mudei para 100 vai receber 100 bytes eventualmente aqui vai estar zero para não ficar preso no read
 
-    tcflush(fd, TCIOFLUSH);
+    tcflush(fdd, TCIOFLUSH);
 
     // Set new port settings
-    if (tcsetattr(fd, TCSANOW, &newtio) == -1)
+    if (tcsetattr(fdd, TCSANOW, &newtio) == -1)
     {
         perror("tcsetattr");
-        close(fd);
+        close(fdd);
         return -1;
     }
 
     // Clear O_NONBLOCK flag to ensure blocking reads
     oflags ^= O_NONBLOCK;
-    if (fcntl(fd, F_SETFL, oflags) == -1)
+    if (fcntl(fdd, F_SETFL, oflags) == -1)
     {
         perror("fcntl");
-        close(fd);
+        close(fdd);
         return -1;
     }
 
     // Done
-    return fd;
+    return fdd;
 }
 
 // Restore original port settings and close the serial port.
@@ -115,13 +115,13 @@ int openSerialPort(const char *serialPort, int baudRate)
 int closeSerialPort()
 {
     // Restore the old port settings
-    if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
+    if (tcsetattr(fdd, TCSANOW, &oldtio) == -1)
     {
         perror("tcsetattr");
         return -1;
     }
 
-    return close(fd);
+    return close(fdd);
 }
 
 // Wait up to 0.1 second (VTIME) for a byte received from the serial port (must
@@ -129,7 +129,7 @@ int closeSerialPort()
 // Returns -1 on error, 0 if no byte was received, 1 if a byte was received.
 int readByteSerialPort(unsigned char *byte)
 {
-    return read(fd, byte, 1);
+    return read(fdd, byte, 1);
 }
 
 // Write up to numBytes to the serial port (must check how many were actually
@@ -137,5 +137,5 @@ int readByteSerialPort(unsigned char *byte)
 // Returns -1 on error, otherwise the number of bytes written.
 int writeBytesSerialPort(const unsigned char *bytes, int numBytes)
 {
-    return write(fd, bytes, numBytes);
+    return write(fdd, bytes, numBytes);
 }

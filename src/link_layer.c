@@ -17,11 +17,12 @@
 #define FLAG_BUFFER_SIZE 5
 
 int allRead = FALSE;
-int setupFirst = TRUE;
 int alarmEnabled;
 int alarmCount = 0;
 enum states current_state = START;
 LinkLayer parameters; 
+unsigned char C_NS = 0;
+int fd;
 
 
 void alarmHandler(int signal)
@@ -58,7 +59,7 @@ int llopen(LinkLayer connectionParameters)
     parameters = connectionParameters;
     (void)signal(SIGALRM, alarmHandler);
 
-    int fd = openSerialPort(connectionParameters.serialPort,
+    fd = openSerialPort(connectionParameters.serialPort,
                             connectionParameters.baudRate);
     if (fd < 0)
     {
@@ -339,8 +340,27 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 int llwrite(const unsigned char *buf, int bufSize)
 {
-    // TODO
-
+    unsigned char F = 0x7E;
+    unsigned char A = 0x03; 
+    unsigned char BCC1 = A ^ C_NS;
+    unsigned char BBC2;
+    for (int i = 0; i < bufSize; i++)
+    {
+        BBC2 ^= buf[i];
+    }
+    unsigned char frame[sizeof(F) + sizeof(A) + sizeof(C_NS) + sizeof(BCC1) + bufSize + sizeof(BBC2) + sizeof(F)];
+    frame[0] = F;
+    frame[1] = A;
+    frame[2] = C_NS;
+    frame[3] = BCC1;
+    for (int i = 0; i < bufSize; i++)
+    {
+        frame[i + 4] = buf[i];
+    }
+    frame[4 + bufSize] = BBC2;
+    frame[5 + bufSize] = F;
+    write(fd, frame, 1);
+    C_NS = 1 - C_NS; //Talvez
     return 0;
 }
 
@@ -349,8 +369,27 @@ int llwrite(const unsigned char *buf, int bufSize)
 ////////////////////////////////////////////////
 int llread(unsigned char *packet)
 {
-    // TODO
-
+    printf("Reading packet\n");
+    unsigned char F = packet[0];
+    unsigned char A = packet[1];
+    unsigned char C = packet[2];
+    unsigned char BCC1 = packet[3];
+    unsigned char control = packet[4];
+    unsigned char sequenceNumber = packet[5];
+    unsigned char L1 = packet[6];
+    unsigned char L2 = packet[7];
+    unsigned char data[256 * L2 + L1];
+    for (int i = 0; i < 256 * L2 + L1; i++)
+    {
+        data[i] = packet[i + 8];
+    }
+    unsigned char BCC2 = packet[8 + 256 * L2 + L1];
+    unsigned char F2 = packet[9 + 256 * L2 + L1];
+    printf("Data: ");
+    for (int i = 0; i < 256 * L2 + L1; i++)
+    {
+        printf("%c", data[i]);
+    }
     return 0;
 }
 
