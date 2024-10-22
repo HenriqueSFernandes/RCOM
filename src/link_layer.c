@@ -18,7 +18,8 @@
 
 int alarmEnabled;
 int alarmCount = 0;
-enum states current_state = START;  
+enum states current_state = START;
+LinkLayer parameters; 
 
 
 void alarmHandler(int signal)
@@ -26,9 +27,9 @@ void alarmHandler(int signal)
   alarmEnabled = FALSE;
   alarmCount++;
   printf("Alarm no:  %d \n", alarmCount);
-  if (alarmCount < 4)
+  if (alarmCount < parameters.nRetransmissions)
   {
-    alarm(3);
+    alarm(parameters.timeout);
     printf("Alarm Triggered! Retransmitting...\n"); // Ainda não está a retransmitir
   }
   else
@@ -44,6 +45,7 @@ void alarmHandler(int signal)
 ////////////////////////////////////////////////
 int llopen(LinkLayer connectionParameters)
 {
+    parameters = connectionParameters;
     (void)signal(SIGALRM, alarmHandler);
     alarm(3);
 
