@@ -85,7 +85,7 @@ int openSerialPort(const char *serialPort, int baudRate)
     // Set input mode (non-canonical, no echo,...)
     newtio.c_lflag = 0;
     newtio.c_cc[VTIME] = 0; // Block reading
-    newtio.c_cc[VMIN] = 100;  // Byte by byte se fosse 1, como mudei para 100 vai receber 100 bytes eventualmente aqui vai estar zero para não ficar preso no read
+    newtio.c_cc[VMIN] = 0;  // Byte by byte se fosse 1, como mudei para 100 vai receber 100 bytes eventualmente aqui vai estar zero para não ficar preso no read
 
     tcflush(fd, TCIOFLUSH);
 
