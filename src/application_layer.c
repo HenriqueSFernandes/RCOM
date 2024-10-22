@@ -53,6 +53,29 @@ int sendControlPacket(const char *filename, unsigned char controlValue,
   return 0;
 }
 
+int sendDataPacket(unsigned char *data, size_t dataSize) {
+  if (data == NULL) {
+    return 1;
+  }
+
+  unsigned char packet[dataSize + 4];
+
+  packet[0] = 2; // Control field 2 (data)
+  packet[1] = 1; // TODO: sequence number wtf is that?????
+  packet[2] = (dataSize >> 8) & 0xFF;
+  packet[3] = dataSize & 0xFF;
+  memcpy(packet + 4, data, dataSize);
+
+  // TODO: call llwrite instead of printing this.
+  printf("Data packet:\n");
+  for (int i = 0; i < dataSize + 4; i++) {
+    printf("%02x ", packet[i]);
+  }
+  printf("\n");
+
+  return 0;
+}
+
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename) {
   // Initialize link layer.
@@ -83,8 +106,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
       return;
     }
 
-    // unsigned char buffer[1000];
-    // size_t bytesRead;
+    unsigned char buffer[1000];
+    size_t bytesRead;
 
     fseek(fptr, 0, SEEK_END);
     size_t fileSize = ftell(fptr);
@@ -96,8 +119,14 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
       llclose(FALSE);
       return;
     }
-    // while ((bytesRead = fread(buffer, 1, sizeof(buffer), fptr)) > 0) {
-    // }
+    while ((bytesRead = fread(buffer, 1, 1000, fptr)) > 0) {
+      if (sendDataPacket(buffer, bytesRead)) {
+        perror("Error sending data packet");
+        fclose(fptr);
+        llclose(FALSE);
+        return;
+      }
+    }
     fclose(fptr);
     return;
   }
