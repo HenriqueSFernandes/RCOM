@@ -114,7 +114,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     rewind(fptr);
 
     if (sendControlPacket(filename, 1, fileSize)) {
-      perror("Error sending the start control packet\n");
+      perror("Error sending the start control packet.\n");
       fclose(fptr);
       llclose(FALSE);
       return;
@@ -127,6 +127,14 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         return;
       }
     }
+
+    if (sendControlPacket(filename, 3, fileSize)) {
+      perror("Error sending the end control packet.\n");
+			fclose(fptr);
+			llclose(FALSE);
+			return;
+    }
+
     fclose(fptr);
     return;
   }
