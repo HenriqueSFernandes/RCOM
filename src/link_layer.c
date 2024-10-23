@@ -340,6 +340,7 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 int llwrite(const unsigned char *buf, int bufSize)
 {
+    // Onde é que fica o destuffing? depois de tirar as flags?
     unsigned char F = 0x7E;
     unsigned char A = 0x03; 
     unsigned char BCC1 = A ^ C_NS;
@@ -371,24 +372,65 @@ int llread(unsigned char *packet)
 {
     printf("Reading packet\n");
     unsigned char F = packet[0];
-    unsigned char A = packet[1];
-    unsigned char C = packet[2];
-    unsigned char BCC1 = packet[3];
-    unsigned char control = packet[4];
-    unsigned char sequenceNumber = packet[5];
-    unsigned char L1 = packet[6];
-    unsigned char L2 = packet[7];
-    unsigned char data[256 * L2 + L1];
-    for (int i = 0; i < 256 * L2 + L1; i++)
+    if (F != 0x7E)
     {
-        data[i] = packet[i + 8];
+        printf("Flag not found\n");
+        return -1;
     }
-    unsigned char BCC2 = packet[8 + 256 * L2 + L1];
-    unsigned char F2 = packet[9 + 256 * L2 + L1];
-    printf("Data: ");
-    for (int i = 0; i < 256 * L2 + L1; i++)
+    unsigned char A = packet[1]; 
+    if (A != 0x03) //Será que pode ser 0x01?
     {
-        printf("%c", data[i]);
+        printf("A not found\n");
+        return -1;
+    }
+    unsigned char C = packet[2]; //Fazer a verificacao de se for o certo receb se for o errado manda RR mas discarta e não guarda
+    unsigned char BCC1 = packet[3]; // Ainda temos de verificar se está ok
+    unsigned char control = packet[4];
+
+
+    if (control == 1){ // CONTROL START Temos de verificar se o último é igual, provavlemnte guardar packet global
+        // T == 0 File size
+        // T == 1 File name
+        // Outros Ts??
+        unsigned char T1 = packet[5]; // Consideramos que é o size? ou fazemos o check?
+        unsigned char L1 = packet[6];
+        unsigned char size[L1];
+        for (int i = 0; i < L1; i++)
+        {
+            size[i] = packet[i + 7];
+        }
+        unsigned char T2 = packet[7 + L1];
+        unsigned char L2 = packet[8 + L1];
+        unsigned char name[L2];
+        for (int i = 0; i < L2; i++)
+        {
+            name[i] = packet[i + 9 + L1];
+        }
+        unsigned char BCC2 = packet[9 + L1 + L2];
+        unsigned char F2 = packet[10 + L1 + L2];
+        printf("Control: %d\n", control);
+
+    }
+    if (control == 2){ // DATA
+        unsigned char sequenceNumber = packet[5];
+        unsigned char L1 = packet[6];
+        unsigned char L2 = packet[7];
+        unsigned char data[256 * L2 + L1];
+        for (int i = 0; i < 256 * L2 + L1; i++)
+        {
+            data[i] = packet[i + 8];
+        }
+        unsigned char BCC2 = packet[8 + 256 * L2 + L1];
+        unsigned char F2 = packet[9 + 256 * L2 + L1];
+        printf("Data: ");
+        for (int i = 0; i < 256 * L2 + L1; i++)
+        {
+            printf("%c", data[i]);
+        }
+        // Mandar para a application layer
+    }
+    if (control == 3){ // Verificar se é igual ao priemiro control
+        //Zé ric quanto é o tamanaho do packet? preciso de saber tamanho do name e tamanho do size para poder criar um array para guardar o primeiro control para comparar com o terceiro control
     }
     return 0;
 }
