@@ -76,6 +76,45 @@ int sendDataPacket(unsigned char *data, size_t dataSize) {
   return 0;
 }
 
+// TODO: MOVE THIS CODE TO LINK LAYER
+int stuffPacket(const unsigned char *packet, size_t packetSize,
+                unsigned char *newPacket, size_t *newPacketSize) {
+  // Assumes newPacket has at least double the size of the packet.
+  // TODO: bcc generation has to happen BEFORE stuffing.
+
+  if (packet == NULL || newPacket == NULL || newPacketSize == NULL) {
+    return 1;
+  }
+
+  size_t packetIndex = 0;
+  size_t newPacketIndex = 0;
+
+  for (; packetIndex < packetSize; packetIndex++, newPacketIndex++) {
+    // Replace FLAG (0x7E) with 0x7D5E.
+    if (packet[packetIndex] == 0x7E) {
+      newPacket[newPacketIndex++] = 0x7D;
+      newPacket[newPacketIndex] = 0x5e;
+    }
+    // Replace ESC (0x7D) with 0x7D5E.
+    else if (packet[packetIndex] == 0x7D) {
+
+      newPacket[newPacketIndex++] = 0x7D;
+      newPacket[newPacketIndex] = 0x5d;
+    } else {
+      newPacket[newPacketIndex] = packet[packetIndex];
+    }
+  }
+  *newPacketSize = newPacketIndex;
+
+  return 0;
+}
+
+// TODO: MOVE THIS CODE TO LINK LAYER
+int destuffPacket() {
+  // TODO: bcc validation has to happen AFTER destuffing.
+  return 0;
+}
+
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename) {
   // Initialize link layer.
@@ -130,12 +169,25 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
     if (sendControlPacket(filename, 3, fileSize)) {
       perror("Error sending the end control packet.\n");
-			fclose(fptr);
-			llclose(FALSE);
-			return;
+      fclose(fptr);
+      llclose(FALSE);
+      return;
     }
 
     fclose(fptr);
     return;
+  }
+
+  if (linkLayer.role == LlRx) {
+    FILE *fptr = fopen(filename, "wb");
+
+    if (fptr == NULL) {
+      perror("Error opening file.\n");
+      fclose(fptr);
+      llclose(FALSE);
+      return;
+    }
+
+    // TODO: finished read code (need llread first).
   }
 }
