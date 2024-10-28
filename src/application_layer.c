@@ -108,7 +108,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
     int sequenceNumber = 0;
     while ((bytesRead = fread(buffer, 1, 1000, fptr)) > 0) {
-      if (sendDataPacket(buffer, bytesRead, sequenceNumber)) {
+      if (sendDataPacket(buffer, bytesRead, sequenceNumber++)) {
         perror("Error sending data packet");
         fclose(fptr);
         llclose(FALSE);
@@ -137,8 +137,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
       llclose(FALSE);
       return;
     }
-    llclose(FALSE);
-
+    unsigned char packet[1000];
+    llread(packet);
     // TODO: finished read code (need llread first).
     //
   }

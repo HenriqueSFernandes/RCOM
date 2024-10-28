@@ -3,6 +3,7 @@
 #include "../include/link_layer.h"
 #include "../include/serial_port.h"
 #include <fcntl.h>
+#include <math.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -306,32 +307,33 @@ int llwrite(const unsigned char *buf, int bufSize) {
 
   // Add header and footer to packet (A, C, BCC1, ..., BCC2). The flags will be
   // added later.
-  unsigned char newPacket[bufSize + 4];
-  newPacket[0] = 0x03;
-  newPacket[1] = informationFrameNumber;
-  newPacket[2] = 0x03 ^ informationFrameNumber;
-  memcpy(&newPacket[3], buf, bufSize);
+  unsigned char newPacket[bufSize + 1];
+  memcpy(&newPacket, buf, bufSize);
 
   unsigned char bcc2 = 0;
   for (size_t i = 0; i < bufSize; i++) {
     bcc2 ^= buf[i];
   }
-  newPacket[bufSize + 3] = bcc2;
-  informationFrameNumber ^= 1; // Toggle informationFrameNumber between 0 and 1.
+  newPacket[bufSize] = bcc2;
 
-  unsigned char stuffedPacket[(bufSize + 4) * 2 + 2];
+  unsigned char stuffedPacket[(bufSize + 1) * 2 + 5];
   size_t stuffedPacketSize;
 
-  if (stuffPacket(newPacket, bufSize + 4, stuffedPacket + 1,
+  if (stuffPacket(newPacket, bufSize + 1, stuffedPacket + 4,
                   &stuffedPacketSize)) {
     perror("Error stuffing packet!\n");
     return -1;
   }
-  stuffedPacketSize += 2;
+  stuffedPacketSize += 5;
 
   // Insert the flags.
   stuffedPacket[0] = 0x7E;
+  stuffedPacket[1] = 0x03;
+  stuffedPacket[2] = informationFrameNumber;
+  stuffedPacket[3] = 0x03 ^ informationFrameNumber;
   stuffedPacket[stuffedPacketSize - 1] = 0x7E;
+  informationFrameNumber ^=
+      0x80; // Toggle informationFrameNumber between 0x00 and 0x80.
 
   printf("Packet after stuffing:\n");
   for (size_t i = 0; i < stuffedPacketSize; i++) {
@@ -340,10 +342,11 @@ int llwrite(const unsigned char *buf, int bufSize) {
   printf("\n");
 
   // Send the packet.
-  if (write(fd, stuffedPacket, stuffedPacketSize)) {
+  if (write(fd, stuffedPacket, stuffedPacketSize) < 0) {
     perror("Error writing stuffed packet.\n");
     return -1;
   }
+  printf("Packet sent!\n");
 
   // Verify response
   enum states currentState = START;
@@ -424,7 +427,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
       alarmEnabled = FALSE;
       if (alarmCount <= parameters.nRetransmissions) {
         printf("Retransmitting packet...\n");
-        if (write(fd, stuffedPacket, stuffedPacketSize)) {
+        if (write(fd, stuffedPacket, stuffedPacketSize) < 0) {
           perror("Error writing stuffed packet.\n");
           return -1;
         }
@@ -441,68 +444,99 @@ int llwrite(const unsigned char *buf, int bufSize) {
 // LLREAD
 ////////////////////////////////////////////////
 int llread(unsigned char *packet) {
-  printf("Reading packet\n");
-  unsigned char F = packet[0];
-  if (F != 0x7E) {
-    printf("Flag not found\n");
-    return -1;
-  }
-  unsigned char A = packet[1];
-  if (A != 0x03) // Será que pode ser 0x01?
-  {
-    printf("A not found\n");
-    return -1;
-  }
-  unsigned char C =
-      packet[2]; // Fazer a verificacao de se for o certo receb se for o
-                 // errado manda RR mas discarta e não guarda
-  unsigned char BCC1 = packet[3]; // Ainda temos de verificar se está ok
-  unsigned char control = packet[4];
+  enum states currentState = START;
+  size_t packetIndex = 0;
 
-  if (control == 1) { // CONTROL START Temos de verificar se o último é igual,
-                      // provavlemnte guardar packet global
-    // T == 0 File size
-    // T == 1 File name
-    // Outros Ts??
-    unsigned char T1 =
-        packet[5]; // Consideramos que é o size? ou fazemos o check?
-    unsigned char L1 = packet[6];
-    unsigned char size[L1];
-    for (int i = 0; i < L1; i++) {
-      size[i] = packet[i + 7];
+  unsigned char receivedA = 0;
+  unsigned char receivedC = 0;
+
+  while (currentState != STOP) {
+    unsigned char byte = 0;
+    int bytes;
+
+    if ((bytes = read(fd, &byte, sizeof(byte))) < 0) {
+      perror("Error reading byte from control frame!\n");
+      return -1;
     }
-    unsigned char T2 = packet[7 + L1];
-    unsigned char L2 = packet[8 + L1];
-    unsigned char name[L2];
-    for (int i = 0; i < L2; i++) {
-      name[i] = packet[i + 9 + L1];
+    if (bytes > 0) {
+      switch (currentState) {
+      case START:
+        receivedC = 0;
+        receivedA = 0;
+        if (byte == 0x7E) {
+          printf("received flag\n");
+          currentState = FLAG_RCV;
+        }
+        break;
+      case FLAG_RCV:
+        if (byte == 0x7E)
+          continue;
+        if (byte == 0x03) {
+          printf("received A: %02x\n", byte);
+          receivedA = byte;
+          currentState = A_RCV;
+        } else
+          currentState = START;
+        break;
+      case A_RCV:
+        if (byte == 0x00 || byte == 0x80) {
+          printf("received C: %02x\n", byte);
+          receivedC = byte;
+          currentState = C_RCV;
+        } else if (byte == 0x7E)
+          currentState = FLAG_RCV;
+        else
+          currentState = START;
+        break;
+      case C_RCV:
+        if (byte == (receivedC ^ receivedA)) {
+          printf("received bcc1: %02x\n", byte);
+          currentState = DATA;
+        } else if (byte == 0x7E)
+          currentState = FLAG_RCV;
+        else
+          currentState = START;
+        break;
+      case DATA:
+        printf("receiving data...\n");
+        if (byte == 0x7E) {
+          unsigned char destuffedPacket[packetIndex];
+          size_t destuffedPacketSize;
+          if (destuffPacket(packet, packetIndex, destuffedPacket,
+                            &destuffedPacketSize)) {
+            return -1;
+          }
+          unsigned char receivedBCC2 = destuffedPacket[destuffedPacketSize - 1];
+          unsigned char bcc2 = 0;
+          for (size_t i = 0; i < destuffedPacketSize - 1; i++) {
+            bcc2 ^= destuffedPacket[i];
+          }
+          unsigned char responseC;
+          if (bcc2 == receivedBCC2) {
+            // if the current frame is 0, ready to receive 1.
+            responseC = (receivedC == 0x00) ? RR1 : RR0;
+            printf("BCC2 matches, approving with %02x\n", responseC);
+          } else {
+            responseC = (receivedC == 0x00) ? REJ0 : REJ1;
+            printf("received bcc2: %02x", receivedBCC2);
+            printf("calculated bcc2: %02x", bcc2);
+            printf("BCC2 doesn't match, rejecting with %02x\n", responseC);
+          }
+          if (sendControlFrame(0x03, responseC)) {
+            return -1;
+          }
+          return destuffedPacketSize;
+        } else {
+          packet[packetIndex++] = byte;
+        }
+        break;
+      default:
+        currentState = START;
+      }
     }
-    unsigned char BCC2 = packet[9 + L1 + L2];
-    unsigned char F2 = packet[10 + L1 + L2];
-    printf("Control: %d\n", control);
   }
-  if (control == 2) { // DATA
-    unsigned char sequenceNumber = packet[5];
-    unsigned char L1 = packet[6];
-    unsigned char L2 = packet[7];
-    unsigned char data[256 * L2 + L1];
-    for (int i = 0; i < 256 * L2 + L1; i++) {
-      data[i] = packet[i + 8];
-    }
-    unsigned char BCC2 = packet[8 + 256 * L2 + L1];
-    unsigned char F2 = packet[9 + 256 * L2 + L1];
-    printf("Data: ");
-    for (int i = 0; i < 256 * L2 + L1; i++) {
-      printf("%c", data[i]);
-    }
-    // Mandar para a application layer
-  }
-  if (control == 3) { // Verificar se é igual ao priemiro control
-    // Zé ric quanto é o tamanaho do packet? preciso de saber tamanho do name
-    // e tamanho do size para poder criar um array para guardar o primeiro
-    // control para comparar com o terceiro control
-  }
-  return 0;
+
+  return -1;
 }
 
 ////////////////////////////////////////////////
