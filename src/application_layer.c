@@ -96,7 +96,7 @@ int destuffPacket(const unsigned char *packet, size_t packetSize,
 
 int sendControlPacket(const char *filename, unsigned char controlValue,
                       size_t fileSize) {
-	// TODO: dont forget to stuff the control packets.
+  // TODO: dont forget to stuff the control packets.
   if (filename == NULL) {
     return 1;
   }
@@ -226,6 +226,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     }
 
     fclose(fptr);
+    llclose(FALSE);
     return;
   }
 
@@ -238,7 +239,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
       llclose(FALSE);
       return;
     }
+    llclose(FALSE);
 
     // TODO: finished read code (need llread first).
+    //
   }
 }

@@ -34,7 +34,7 @@ enum states
   A_RCV,
   C_RCV,
   BCC_OK,
-  STOPSTOP,
+  STOP,
 };
 
 // Open a connection using the "port" parameters defined in struct linkLayer.
