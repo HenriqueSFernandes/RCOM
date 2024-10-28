@@ -23,6 +23,8 @@ enum states current_state = START;
 LinkLayer parameters;
 unsigned char C_NS = 0;
 int fd;
+unsigned char informationFrameNumber =
+    0; // Used to generate the information frame.
 
 // Increases the counter on alarm signal.
 void alarmHandler(int signal) {
@@ -36,6 +38,72 @@ void disableAlarm() {
   alarmEnabled = FALSE;
   alarm(0);
   alarmCount = 0;
+}
+
+int stuffPacket(const unsigned char *packet, size_t packetSize,
+                unsigned char *newPacket, size_t *newPacketSize) {
+  // Assumes newPacket has at least double the size of the packet.
+
+  if (packet == NULL || newPacket == NULL || newPacketSize == NULL) {
+    return 1;
+  }
+
+  size_t newPacketIndex = 0;
+
+  for (size_t packetIndex = 0; packetIndex < packetSize;
+       packetIndex++, newPacketIndex++) {
+    // Replace FLAG (0x7E) with 0x7D5E.
+    if (packet[packetIndex] == 0x7E) {
+      newPacket[newPacketIndex++] = 0x7D;
+      newPacket[newPacketIndex] = 0x5E;
+    }
+    // Replace ESC (0x7D) with 0x7D5E.
+    else if (packet[packetIndex] == 0x7D) {
+      newPacket[newPacketIndex++] = 0x7D;
+      newPacket[newPacketIndex] = 0x5D;
+    } else {
+      // printf("no flag detected, copying from index %zd (%02x) to index %zd
+      // (%02x) \n", packetIndex, packet[packetIndex], newPacketIndex,
+      // newPacket[newPacketIndex]);
+      newPacket[newPacketIndex] = packet[packetIndex];
+    }
+  }
+  *newPacketSize = newPacketIndex;
+
+  return 0;
+}
+
+int destuffPacket(const unsigned char *packet, size_t packetSize,
+                  unsigned char *newPacket, size_t *newPacketSize) {
+  // TODO: bcc validation has to happen AFTER destuffing.
+  if (packet == NULL || newPacket == NULL || newPacketSize == NULL) {
+    return 1;
+  }
+
+  size_t newPacketIndex = 0;
+
+  for (size_t packetIndex = 0; packetIndex < packetSize;
+       packetIndex++, newPacketIndex++) {
+    if (packet[packetIndex] != 0x7D) {
+      newPacket[newPacketIndex] = packet[packetIndex];
+    } else {
+      if (packet[packetIndex + 1] == 0x5E) {
+        newPacket[newPacketIndex] = 0x7E;
+      } else if (packet[packetIndex + 1] == 0x5D) {
+        newPacket[newPacketIndex] = 0x7D;
+      }
+      packetIndex++;
+    }
+  }
+
+  *newPacketSize = newPacketIndex;
+  printf("Destuffed packet with size %zd:\n", *newPacketSize);
+  for (size_t i = 0; i < *newPacketSize; i++) {
+    printf("%02x ", newPacket[i]);
+  }
+  printf("\n");
+
+  return 0;
 }
 
 /// @brief Sends control frame.
@@ -227,27 +295,50 @@ int llopen(LinkLayer connectionParameters) {
 // LLWRITE
 ////////////////////////////////////////////////
 int llwrite(const unsigned char *buf, int bufSize) {
-  // Onde é que fica o destuffing? depois de tirar as flags?
-  unsigned char F = 0x7E;
-  unsigned char A = 0x03;
-  unsigned char BCC1 = A ^ C_NS;
-  unsigned char BBC2;
-  for (int i = 0; i < bufSize; i++) {
-    BBC2 ^= buf[i];
+  if (buf == NULL) {
+    return -1;
   }
-  unsigned char frame[sizeof(F) + sizeof(A) + sizeof(C_NS) + sizeof(BCC1) +
-                      bufSize + sizeof(BBC2) + sizeof(F)];
-  frame[0] = F;
-  frame[1] = A;
-  frame[2] = C_NS;
-  frame[3] = BCC1;
-  for (int i = 0; i < bufSize; i++) {
-    frame[i + 4] = buf[i];
+
+  // Add header and footer to packet (A, C, BCC1, ..., BCC2). The flags will be
+  // added later.
+  unsigned char newPacket[bufSize + 4];
+  newPacket[0] = 0x03;
+  newPacket[1] = informationFrameNumber;
+  newPacket[2] = 0x03 ^ informationFrameNumber;
+  memcpy(&newPacket[3], buf, bufSize);
+
+  unsigned char bcc2 = 0;
+  for (size_t i = 0; i < bufSize; i++) {
+    bcc2 ^= buf[i];
   }
-  frame[4 + bufSize] = BBC2;
-  frame[5 + bufSize] = F;
-  write(fd, frame, 1);
-  C_NS = 1 - C_NS; // Talvez
+  newPacket[bufSize + 3] = bcc2;
+  informationFrameNumber ^= 1; // Toggle informationFrameNumber between 0 and 1.
+
+  unsigned char stuffedPacket[(bufSize + 4) * 2 + 2];
+  size_t stuffedPacketSize;
+
+  if (stuffPacket(newPacket, bufSize + 4, stuffedPacket + 1,
+                  &stuffedPacketSize)) {
+    perror("Error stuffing packet!\n");
+    return -1;
+  }
+  stuffedPacketSize += 2;
+
+  // Insert the flags.
+  stuffedPacket[0] = 0x7E;
+  stuffedPacket[stuffedPacketSize - 1] = 0x7E;
+
+  printf("Packet after stuffing:\n");
+  for (size_t i = 0; i < stuffedPacketSize; i++) {
+    printf("%02x ", stuffedPacket[i]);
+  }
+  printf("\n");
+
+	// Send the packet.
+	
+	// Verify ack.
+
+
   return 0;
 }
 

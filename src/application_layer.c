@@ -19,84 +19,8 @@ int hexdump(const char *filename) {
   return 0;
 }
 
-// TODO: MOVE THIS CODE TO LINK LAYER
-int stuffPacket(const unsigned char *packet, size_t packetSize,
-                unsigned char *newPacket, size_t *newPacketSize) {
-  // Assumes newPacket has at least double the size of the packet.
-  // TODO: bcc generation has to happen BEFORE stuffing.
-
-  if (packet == NULL || newPacket == NULL || newPacketSize == NULL) {
-    return 1;
-  }
-
-  size_t newPacketIndex = 0;
-
-  for (size_t packetIndex = 0; packetIndex < packetSize;
-       packetIndex++, newPacketIndex++) {
-    // Replace FLAG (0x7E) with 0x7D5E.
-    if (packet[packetIndex] == 0x7E) {
-      newPacket[newPacketIndex++] = 0x7D;
-      newPacket[newPacketIndex] = 0x5E;
-    }
-    // Replace ESC (0x7D) with 0x7D5E.
-    else if (packet[packetIndex] == 0x7D) {
-      newPacket[newPacketIndex++] = 0x7D;
-      newPacket[newPacketIndex] = 0x5D;
-    } else {
-      // printf("no flag detected, copying from index %zd (%02x) to index %zd
-      // (%02x) \n", packetIndex, packet[packetIndex], newPacketIndex,
-      // newPacket[newPacketIndex]);
-      newPacket[newPacketIndex] = packet[packetIndex];
-    }
-  }
-  *newPacketSize = newPacketIndex;
-
-  printf("Stuffed packet with size %zd:\n", *newPacketSize);
-  for (size_t i = 0; i < *newPacketSize; i++) {
-    printf("%02x ", newPacket[i]);
-  }
-  printf("\n");
-
-  return 0;
-}
-
-// TODO: MOVE THIS CODE TO LINK LAYER
-int destuffPacket(const unsigned char *packet, size_t packetSize,
-                  unsigned char *newPacket, size_t *newPacketSize) {
-  // TODO: bcc validation has to happen AFTER destuffing.
-  if (packet == NULL || newPacket == NULL || newPacketSize == NULL) {
-    return 1;
-  }
-
-  size_t newPacketIndex = 0;
-
-  for (size_t packetIndex = 0; packetIndex < packetSize;
-       packetIndex++, newPacketIndex++) {
-    if (packet[packetIndex] != 0x7D) {
-      newPacket[newPacketIndex] = packet[packetIndex];
-    } else {
-      if (packet[packetIndex + 1] == 0x5E) {
-        newPacket[newPacketIndex] = 0x7E;
-      } else if (packet[packetIndex + 1] == 0x5D) {
-        newPacket[newPacketIndex] = 0x7D;
-      }
-      packetIndex++;
-    }
-  }
-
-  *newPacketSize = newPacketIndex;
-  printf("Destuffed packet with size %zd:\n", *newPacketSize);
-  for (size_t i = 0; i < *newPacketSize; i++) {
-    printf("%02x ", newPacket[i]);
-  }
-  printf("\n");
-
-  return 0;
-}
-
 int sendControlPacket(const char *filename, unsigned char controlValue,
                       size_t fileSize) {
-  // TODO: dont forget to stuff the control packets.
   if (filename == NULL) {
     return 1;
   }
@@ -119,17 +43,10 @@ int sendControlPacket(const char *filename, unsigned char controlValue,
   packet[4 + L1] = L2;                   // size of file name
   memcpy(&packet[5 + L1], filename, L2); // filename
 
-  // TODO: call llwrite instead of printing this.
-  printf("Control packet: ");
-  for (int i = 0; i < 5 + L1 + L2; i++) {
-    printf("%02x ", packet[i]);
-  }
-  printf("\n");
-
-  return 0;
+  return llwrite(packet, 5 + L1 + L2);
 }
 
-int sendDataPacket(unsigned char *data, size_t dataSize) {
+int sendDataPacket(unsigned char *data, size_t dataSize, int sequenceNumber) {
   if (data == NULL) {
     return 1;
   }
@@ -137,33 +54,12 @@ int sendDataPacket(unsigned char *data, size_t dataSize) {
   unsigned char packet[dataSize + 4];
 
   packet[0] = 2; // Control field 2 (data)
-  packet[1] = 1; // TODO: sequence number wtf is that?????
+  packet[1] = sequenceNumber;
   packet[2] = (dataSize >> 8) & 0xFF;
   packet[3] = dataSize & 0xFF;
   memcpy(packet + 4, data, dataSize);
 
-  // TODO: call llwrite instead of printing this.
-  printf("Data packet:\n");
-  for (int i = 0; i < dataSize + 4; i++) {
-    printf("%02x ", packet[i]);
-  }
-  printf("\n");
-
-  // TODO: move stuffing to link layer
-  unsigned char stuffedPacket[dataSize * 2 + 8];
-  size_t stuffedPacketSize;
-
-  stuffPacket(packet, dataSize + 4, stuffedPacket, &stuffedPacketSize);
-  // ---------------------
-
-  // TODO: move destuffing to link layer
-  unsigned char destuffedPacket[dataSize + 4];
-  size_t destuffedPacketSize;
-
-  destuffPacket(stuffedPacket, stuffedPacketSize, destuffedPacket,
-                &destuffedPacketSize);
-  // ---------------------
-  return 0;
+  return llwrite(packet, dataSize + 4);
 }
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
@@ -209,8 +105,10 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
       llclose(FALSE);
       return;
     }
+
+    int sequenceNumber = 0;
     while ((bytesRead = fread(buffer, 1, 1000, fptr)) > 0) {
-      if (sendDataPacket(buffer, bytesRead)) {
+      if (sendDataPacket(buffer, bytesRead, sequenceNumber)) {
         perror("Error sending data packet");
         fclose(fptr);
         llclose(FALSE);
