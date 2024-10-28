@@ -16,6 +16,11 @@
 #define _POSIX_SOURCE 1 // POSIX compliant source
 #define FLAG_BUFFER_SIZE 5
 
+#define RR0 0xAA
+#define RR1 0xAB
+#define REJ0 0x54
+#define REJ1 0x55
+
 int allRead = FALSE;
 int alarmEnabled;
 int alarmCount = 0;
@@ -243,9 +248,9 @@ int sendControlAndAwaitAck(unsigned char A, unsigned char C,
     }
 
     if (alarmEnabled) {
-      printf("Retransmitting...\n");
       alarmEnabled = FALSE;
       if (alarmCount <= parameters.nRetransmissions) {
+        printf("Retransmitting...\n");
         if (sendControlFrame(A, C))
           return -1;
         alarm(parameters.timeout);
@@ -334,12 +339,102 @@ int llwrite(const unsigned char *buf, int bufSize) {
   }
   printf("\n");
 
-	// Send the packet.
-	
-	// Verify ack.
+  // Send the packet.
+  if (write(fd, stuffedPacket, stuffedPacketSize)) {
+    perror("Error writing stuffed packet.\n");
+    return -1;
+  }
 
+  // Verify response
+  enum states currentState = START;
+  (void)signal(SIGALRM, alarmHandler);
+  alarm(parameters.timeout);
 
-  return 0;
+  unsigned char receivedA = 0;
+  unsigned char receivedC = 0;
+
+  while (currentState != STOP && alarmCount <= parameters.nRetransmissions) {
+    unsigned char byte = 0;
+    int bytes;
+
+    if ((bytes = read(fd, &byte, sizeof(byte))) < 0) {
+      perror("Error reading byte from control frame!\n");
+      return -1;
+    }
+    if (bytes > 0) {
+      switch (currentState) {
+      case START:
+        receivedA = 0;
+        receivedC = 0;
+        if (byte == 0x7E)
+          currentState = FLAG_RCV;
+        break;
+      case FLAG_RCV:
+        if (byte == 0x7E)
+          continue;
+        if (byte == 0x03) {
+          receivedA = byte;
+          currentState = A_RCV;
+        } else {
+          currentState = START;
+        }
+        break;
+      case A_RCV:
+        if (byte == RR0 || byte == RR1 || byte == REJ0 || byte == REJ1) {
+          receivedC = byte;
+          currentState = C_RCV;
+        } else if (byte == 0x7E)
+          currentState = FLAG_RCV;
+        else
+          currentState = START;
+        break;
+      case C_RCV:
+        if (byte == (receivedA ^ receivedC))
+          currentState = BCC_OK;
+        else if (byte == 0x7E)
+          currentState = FLAG_RCV;
+        else
+          currentState = START;
+      case BCC_OK:
+        if (byte == 0x7E)
+          currentState = STOP;
+        else
+          currentState = START;
+        break;
+      default:
+        currentState = START;
+      }
+    }
+
+    if (currentState == STOP) {
+      // TODO: reject based on information number (currently using same reject
+      // for both)
+      if (receivedC == REJ0 || receivedC == REJ1) {
+        alarmEnabled = TRUE;
+        alarmCount = 0;
+        printf("Packet rejected by receiver, trying again...\n");
+      }
+      if (receivedC == RR0 || receivedC == RR1) {
+        disableAlarm();
+        return stuffedPacketSize;
+      }
+    }
+    // Verify if the alarm fired
+    if (alarmEnabled) {
+      alarmEnabled = FALSE;
+      if (alarmCount <= parameters.nRetransmissions) {
+        printf("Retransmitting packet...\n");
+        if (write(fd, stuffedPacket, stuffedPacketSize)) {
+          perror("Error writing stuffed packet.\n");
+          return -1;
+        }
+        alarm(parameters.timeout);
+      }
+      currentState = START;
+    }
+  }
+  disableAlarm();
+  return -1;
 }
 
 ////////////////////////////////////////////////
@@ -359,8 +454,8 @@ int llread(unsigned char *packet) {
     return -1;
   }
   unsigned char C =
-      packet[2]; // Fazer a verificacao de se for o certo receb se for o errado
-                 // manda RR mas discarta e não guarda
+      packet[2]; // Fazer a verificacao de se for o certo receb se for o
+                 // errado manda RR mas discarta e não guarda
   unsigned char BCC1 = packet[3]; // Ainda temos de verificar se está ok
   unsigned char control = packet[4];
 
@@ -403,9 +498,9 @@ int llread(unsigned char *packet) {
     // Mandar para a application layer
   }
   if (control == 3) { // Verificar se é igual ao priemiro control
-    // Zé ric quanto é o tamanaho do packet? preciso de saber tamanho do name e
-    // tamanho do size para poder criar um array para guardar o primeiro control
-    // para comparar com o terceiro control
+    // Zé ric quanto é o tamanaho do packet? preciso de saber tamanho do name
+    // e tamanho do size para poder criar um array para guardar o primeiro
+    // control para comparar com o terceiro control
   }
   return 0;
 }
