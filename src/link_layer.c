@@ -1,7 +1,7 @@
 // Link layer protocol implementation
 
-#include "link_layer.h"
-#include "serial_port.h"
+#include "../include/link_layer.h"
+#include "../include/serial_port.h"
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -191,7 +191,7 @@ int llopen(LinkLayer connectionParameters)
         if (alarmEnabled == TRUE)
         {
             perror("Time exceeded! Exiting...");
-            return 0;
+            return 1;
         }
     }
     else
@@ -332,7 +332,7 @@ int llopen(LinkLayer connectionParameters)
         }
     }
 
-    return 1;
+    return 0;
 }
 
 ////////////////////////////////////////////////
