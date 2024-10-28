@@ -22,7 +22,7 @@ int hexdump(const char *filename) {
 int sendControlPacket(const char *filename, unsigned char controlValue,
                       size_t fileSize) {
   if (filename == NULL) {
-    return 1;
+    return -1;
   }
 
   unsigned char L1 = sizeof(fileSize);
@@ -48,7 +48,7 @@ int sendControlPacket(const char *filename, unsigned char controlValue,
 
 int sendDataPacket(unsigned char *data, size_t dataSize, int sequenceNumber) {
   if (data == NULL) {
-    return 1;
+    return -1;
   }
 
   unsigned char packet[dataSize + 4];
@@ -99,7 +99,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     size_t fileSize = ftell(fptr);
     rewind(fptr);
 
-    if (sendControlPacket(filename, 1, fileSize)) {
+    if (sendControlPacket(filename, 1, fileSize) < 0) {
       perror("Error sending the start control packet.\n");
       fclose(fptr);
       llclose(FALSE);
@@ -108,7 +108,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
     int sequenceNumber = 0;
     while ((bytesRead = fread(buffer, 1, 1000, fptr)) > 0) {
-      if (sendDataPacket(buffer, bytesRead, sequenceNumber++)) {
+      if (sendDataPacket(buffer, bytesRead, sequenceNumber++) < 0) {
         perror("Error sending data packet");
         fclose(fptr);
         llclose(FALSE);

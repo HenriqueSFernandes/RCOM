@@ -369,13 +369,17 @@ int llwrite(const unsigned char *buf, int bufSize) {
       case START:
         receivedA = 0;
         receivedC = 0;
-        if (byte == 0x7E)
+        if (byte == 0x7E) {
+          printf("received flag\n");
+          ;
           currentState = FLAG_RCV;
+        }
         break;
       case FLAG_RCV:
         if (byte == 0x7E)
           continue;
         if (byte == 0x03) {
+          printf("received A\n");
           receivedA = byte;
           currentState = A_RCV;
         } else {
@@ -384,6 +388,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
         break;
       case A_RCV:
         if (byte == RR0 || byte == RR1 || byte == REJ0 || byte == REJ1) {
+          printf("received C\n");
           receivedC = byte;
           currentState = C_RCV;
         } else if (byte == 0x7E)
@@ -392,24 +397,26 @@ int llwrite(const unsigned char *buf, int bufSize) {
           currentState = START;
         break;
       case C_RCV:
-        if (byte == (receivedA ^ receivedC))
+        if (byte == (receivedA ^ receivedC)) {
           currentState = BCC_OK;
-        else if (byte == 0x7E)
+        } else if (byte == 0x7E)
           currentState = FLAG_RCV;
         else
           currentState = START;
+        break;
       case BCC_OK:
-        if (byte == 0x7E)
+        if (byte == 0x7E) {
+          printf("received final flag.\n");
           currentState = STOP;
-        else
+        } else
           currentState = START;
         break;
       default:
         currentState = START;
       }
     }
-
     if (currentState == STOP) {
+      printf("received response\n");
       // TODO: reject based on information number (currently using same reject
       // for both)
       if (receivedC == REJ0 || receivedC == REJ1) {
@@ -418,6 +425,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
         printf("Packet rejected by receiver, trying again...\n");
       }
       if (receivedC == RR0 || receivedC == RR1) {
+        printf("Packet accepted by receiver, proceding to the next.\n");
         disableAlarm();
         return stuffedPacketSize;
       }
