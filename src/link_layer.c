@@ -81,7 +81,6 @@ int stuffPacket(const unsigned char *packet, size_t packetSize,
 
 int destuffPacket(const unsigned char *packet, size_t packetSize,
                   unsigned char *newPacket, size_t *newPacketSize) {
-  // TODO: bcc validation has to happen AFTER destuffing.
   if (packet == NULL || newPacket == NULL || newPacketSize == NULL) {
     return 1;
   }
@@ -103,11 +102,6 @@ int destuffPacket(const unsigned char *packet, size_t packetSize,
   }
 
   *newPacketSize = newPacketIndex;
-  printf("Destuffed packet with size %zd:\n", *newPacketSize);
-  for (size_t i = 0; i < *newPacketSize; i++) {
-    printf("%02x ", newPacket[i]);
-  }
-  printf("\n");
 
   return 0;
 }
@@ -335,12 +329,6 @@ int llwrite(const unsigned char *buf, int bufSize) {
   informationFrameNumber ^=
       0x80; // Toggle informationFrameNumber between 0x00 and 0x80.
 
-  printf("Packet after stuffing:\n");
-  for (size_t i = 0; i < stuffedPacketSize; i++) {
-    printf("%02x ", stuffedPacket[i]);
-  }
-  printf("\n");
-
   // Send the packet.
   if (write(fd, stuffedPacket, stuffedPacketSize) < 0) {
     perror("Error writing stuffed packet.\n");
@@ -506,7 +494,6 @@ int llread(unsigned char *packet) {
           currentState = START;
         break;
       case DATA:
-        printf("receiving data...\n");
         if (byte == 0x7E) {
           unsigned char destuffedPacket[packetIndex];
           size_t destuffedPacketSize;
@@ -529,11 +516,15 @@ int llread(unsigned char *packet) {
             printf("received bcc2: %02x", receivedBCC2);
             printf("calculated bcc2: %02x", bcc2);
             printf("BCC2 doesn't match, rejecting with %02x\n", responseC);
+            if (sendControlFrame(0x03, responseC))
+              return -1;
+            return 0;
           }
           if (sendControlFrame(0x03, responseC)) {
             return -1;
           }
-          return destuffedPacketSize;
+          memcpy(packet, destuffedPacket, destuffedPacketSize - 1);
+          return destuffedPacketSize - 1; // -1 to remove BCC2
         } else {
           packet[packetIndex++] = byte;
         }

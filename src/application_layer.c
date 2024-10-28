@@ -2,10 +2,16 @@
 
 #include "../include/application_layer.h"
 #include "../include/link_layer.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+typedef struct {
+  size_t fileSize;
+  char *filename;
+} FileMetadata;
 
 int hexdump(const char *filename) {
   char command[256];
@@ -42,7 +48,6 @@ int sendControlPacket(const char *filename, unsigned char controlValue,
   packet[3 + L1] = 1;                    // 1 for file name
   packet[4 + L1] = L2;                   // size of file name
   memcpy(&packet[5 + L1], filename, L2); // filename
-
   return llwrite(packet, 5 + L1 + L2);
 }
 
@@ -59,7 +64,106 @@ int sendDataPacket(unsigned char *data, size_t dataSize, int sequenceNumber) {
   packet[3] = dataSize & 0xFF;
   memcpy(packet + 4, data, dataSize);
 
+  printf("Data packet with size %zu:\n", dataSize + 4);
+  for (int i = 0; i < dataSize + 4; i++) {
+    printf("%02x ", packet[i]);
+  }
+  printf("\n");
+
   return llwrite(packet, dataSize + 4);
+}
+
+int receiveStartControlPacket(const unsigned char *packet, size_t packetSize,
+                              FileMetadata *metadata) {
+  if (packet == NULL || packet[0] != 1) {
+    return 1;
+  }
+
+  // If the first parameter isn't the file size, return error.
+  if (packet[1] != 0) {
+    return 1;
+  }
+
+  unsigned char filesizeSize =
+      packet[2]; // size in octects of the file size value.
+
+  int fileSize = 0;
+  for (int i = 0; i < filesizeSize; i++) {
+    fileSize |= (packet[i + 3]) << (i * 8);
+  }
+  metadata->fileSize = fileSize;
+
+  // If the second parameter isn't the file name, return error.
+  if (packet[filesizeSize + 3] != 1) {
+    return 1;
+  }
+
+  unsigned char filenameSize = packet[filesizeSize + 4];
+  char filename[filenameSize + 1];
+  for (int i = 0; i < filenameSize; i++) {
+    filename[i] = packet[filesizeSize + 5 + i];
+  }
+  filename[filenameSize] = '\0';
+  metadata->filename = filename;
+  return 0;
+}
+
+int receiveEndControlPacket(const unsigned char *packet, size_t packetSize,
+                            FileMetadata metadata) {
+  if (packet == NULL || packet[0] != 3) {
+    return 1;
+  }
+
+  if (packet[1] != 0) {
+    return 1;
+  }
+
+  unsigned char filesizeSize =
+      packet[2]; // size in octects of the file size value.
+
+  int fileSize = 0;
+  for (int i = 0; i < filesizeSize; i++) {
+    fileSize |= (packet[i + 3]) << (i * 8);
+  }
+  if (metadata.fileSize != fileSize) {
+    perror("Error: start packet filesize doesn't match end packet filesize.\n");
+    return 1;
+  }
+
+  // If the second parameter isn't the file name, return error.
+  if (packet[filesizeSize + 3] != 1) {
+    return 1;
+  }
+
+  unsigned char filenameSize = packet[filesizeSize + 4];
+  char filename[filenameSize + 1];
+  for (int i = 0; i < filenameSize; i++) {
+    filename[i] = packet[filesizeSize + 5 + i];
+  }
+  filename[filenameSize] = '\0';
+  if (metadata.filename != filename) {
+    perror("Error: start packet filename doesn't match end packet filename.\n");
+    return 1;
+  }
+  return 0;
+}
+
+int receiveDataPacket(unsigned char *packet, size_t *packetSize) {
+
+  if (packet == NULL || packetSize == NULL || packet[0] != 2) {
+    return 1;
+  }
+  *packetSize = packet[2] * 256 + packet[3];
+
+  packet += 4;
+  printf("Data packet with size %zu\n", *packetSize);
+
+  for (size_t i = 0; i < *packetSize; i++) {
+    printf("%02x ", packet[i]);
+  }
+  printf("\n");
+
+  return 0;
 }
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
@@ -129,6 +233,11 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
   }
 
   if (linkLayer.role == LlRx) {
+    FileMetadata fileMetadata = {0, ""};
+
+    unsigned char packet[1020]; // the data packet should be at most 1000, but
+                                // lets add 20 to be sure.
+
     FILE *fptr = fopen(filename, "wb");
 
     if (fptr == NULL) {
@@ -137,9 +246,64 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
       llclose(FALSE);
       return;
     }
-    unsigned char packet[1000];
-    llread(packet);
-    // TODO: finished read code (need llread first).
-    //
+
+    int receiving = 1;
+
+    while (receiving) {
+      size_t bytesRead = llread(packet);
+      if (bytesRead == 0) {
+        continue;
+      }
+      if (bytesRead < 0) {
+        perror("Failed to read from packet from link layer.\n");
+        fclose(fptr);
+        llclose(FALSE);
+        return;
+      }
+
+      if (packet[0] == 1) {
+        // Start control packet
+        if (receiveStartControlPacket(packet, bytesRead, &fileMetadata)) {
+          perror("Error reading start control packet.\n");
+          fclose(fptr);
+          llclose(FALSE);
+          return;
+        }
+
+        printf("name: %s, size: %zu\n", fileMetadata.filename,
+               fileMetadata.fileSize);
+      } else if (packet[0] == 3) {
+        // End control packet
+        if (receiveEndControlPacket(packet, bytesRead, fileMetadata)) {
+          perror("Error reading end control packet.\n");
+          fclose(fptr);
+          llclose(FALSE);
+          return;
+        }
+
+      } else if (packet[0] == 2) {
+        // Data packet
+
+        if (receiveDataPacket(packet, &bytesRead)) {
+          perror("Error reading data packet.\n");
+          fclose(fptr);
+          llclose(FALSE);
+          return;
+        }
+        printf("aaaaaData packet with size %zu\n", bytesRead);
+
+        for (size_t i = 0; i < bytesRead + 4; i++) {
+          printf("%02x ", packet[i]);
+        }
+        printf("\n");
+        fwrite(packet + 4, 1, bytesRead, fptr);
+      }
+    }
+    fclose(fptr);
+  }
+
+  if (llclose(TRUE) == -1) {
+    perror("Error closing connection.\n");
+    return;
   }
 }
