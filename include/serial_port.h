@@ -12,7 +12,7 @@ int openSerialPort(const char *serialPort, int baudRate);
 // Returns -1 on error.
 int closeSerialPort();
 
-// Wait up to 0.1 second (VTIME) for a byte received from the serial port (must
+// Wait for a byte received from the serial port and read it (must
 // check whether a byte was actually received from the return value).
 // Returns -1 on error, 0 if no byte was received, 1 if a byte was received.
 int readByteSerialPort(unsigned char *byte);

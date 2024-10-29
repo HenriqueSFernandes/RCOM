@@ -14,4 +14,5 @@
 //   filename: Name of the file to send / receive.
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename);
+
 #endif // _APPLICATION_LAYER_H_

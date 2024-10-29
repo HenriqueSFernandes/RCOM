@@ -22,6 +22,16 @@
 #define REJ0 0x54
 #define REJ1 0x55
 
+enum states {
+  START,
+  FLAG_RCV,
+  A_RCV,
+  C_RCV,
+  BCC_OK,
+  STOP,
+  DATA,
+};
+
 int allRead = FALSE;
 int alarmEnabled;
 int alarmCount = 0;
