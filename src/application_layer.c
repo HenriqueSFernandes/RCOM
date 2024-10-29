@@ -65,7 +65,7 @@ int sendDataPacket(unsigned char *data, size_t dataSize, int sequenceNumber) {
   memcpy(packet + 4, data, dataSize);
 
   printf("Data packet with size %zu:\n", dataSize + 4);
-  for (int i = 0; i < dataSize + 4; i++) {
+  for (size_t i = 0; i < dataSize + 4; i++) {
     printf("%02x ", packet[i]);
   }
   printf("\n");
@@ -73,7 +73,7 @@ int sendDataPacket(unsigned char *data, size_t dataSize, int sequenceNumber) {
   return llwrite(packet, dataSize + 4);
 }
 
-int receiveStartControlPacket(const unsigned char *packet, size_t packetSize,
+int receiveStartControlPacket(const unsigned char *packet,
                               FileMetadata *metadata) {
   if (packet == NULL || packet[0] != 1) {
     return 1;
@@ -108,7 +108,7 @@ int receiveStartControlPacket(const unsigned char *packet, size_t packetSize,
   return 0;
 }
 
-int receiveEndControlPacket(const unsigned char *packet, size_t packetSize,
+int receiveEndControlPacket(const unsigned char *packet,
                             FileMetadata metadata) {
   if (packet == NULL || packet[0] != 3) {
     return 1;
@@ -121,8 +121,8 @@ int receiveEndControlPacket(const unsigned char *packet, size_t packetSize,
   unsigned char filesizeSize =
       packet[2]; // size in octects of the file size value.
 
-  int fileSize = 0;
-  for (int i = 0; i < filesizeSize; i++) {
+  size_t fileSize = 0;
+  for (size_t i = 0; i < filesizeSize; i++) {
     fileSize |= (packet[i + 3]) << (i * 8);
   }
   if (metadata.fileSize != fileSize) {
@@ -148,7 +148,7 @@ int receiveEndControlPacket(const unsigned char *packet, size_t packetSize,
   return 0;
 }
 
-int receiveDataPacket(unsigned char *packet, size_t *packetSize) {
+int receiveDataPacket(unsigned char *packet, int *packetSize) {
 
   if (packet == NULL || packetSize == NULL || packet[0] != 2) {
     return 1;
@@ -156,9 +156,9 @@ int receiveDataPacket(unsigned char *packet, size_t *packetSize) {
   *packetSize = packet[2] * 256 + packet[3];
 
   packet += 4;
-  printf("Data packet with size %zu\n", *packetSize);
+  printf("Data packet with size %d\n", *packetSize);
 
-  for (size_t i = 0; i < *packetSize; i++) {
+  for (int i = 0; i < *packetSize; i++) {
     printf("%02x ", packet[i]);
   }
   printf("\n");
@@ -250,7 +250,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     int receiving = 1;
 
     while (receiving) {
-      size_t bytesRead = llread(packet);
+      int bytesRead = llread(packet);
       if (bytesRead == 0) {
         continue;
       }
@@ -263,7 +263,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
       if (packet[0] == 1) {
         // Start control packet
-        if (receiveStartControlPacket(packet, bytesRead, &fileMetadata)) {
+        if (receiveStartControlPacket(packet, &fileMetadata)) {
           perror("Error reading start control packet.\n");
           fclose(fptr);
           llclose(FALSE);
@@ -274,12 +274,13 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                fileMetadata.fileSize);
       } else if (packet[0] == 3) {
         // End control packet
-        if (receiveEndControlPacket(packet, bytesRead, fileMetadata)) {
+        if (receiveEndControlPacket(packet, fileMetadata)) {
           perror("Error reading end control packet.\n");
           fclose(fptr);
           llclose(FALSE);
           return;
         }
+        receiving = 0;
 
       } else if (packet[0] == 2) {
         // Data packet
@@ -290,9 +291,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
           llclose(FALSE);
           return;
         }
-        printf("aaaaaData packet with size %zu\n", bytesRead);
+        printf("aaaaaData packet with size %d\n", bytesRead);
 
-        for (size_t i = 0; i < bytesRead + 4; i++) {
+        for (int i = 0; i < bytesRead + 4; i++) {
           printf("%02x ", packet[i]);
         }
         printf("\n");

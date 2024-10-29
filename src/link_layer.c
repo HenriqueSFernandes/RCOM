@@ -315,7 +315,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
   memcpy(&newPacket, buf, bufSize);
 
   unsigned char bcc2 = 0;
-  for (size_t i = 0; i < bufSize; i++) {
+  for (int i = 0; i < bufSize; i++) {
     bcc2 ^= buf[i];
   }
   newPacket[bufSize] = bcc2;
