@@ -8,10 +8,14 @@
 #include <string.h>
 #include <unistd.h>
 
+#define MAXFILESIZE 256
+
 typedef struct {
   size_t fileSize;
-  char *filename;
+  char filename[MAXFILESIZE];
 } FileMetadata;
+
+FileMetadata fileMetadata = {0, ""};
 
 int hexdump(const char *filename) {
   char command[256];
@@ -64,11 +68,13 @@ int sendDataPacket(unsigned char *data, size_t dataSize, int sequenceNumber) {
   packet[3] = dataSize & 0xFF;
   memcpy(packet + 4, data, dataSize);
 
+#ifdef DEBUG
   printf("Data packet with size %zu:\n", dataSize + 4);
   for (size_t i = 0; i < dataSize + 4; i++) {
     printf("%02x ", packet[i]);
   }
   printf("\n");
+#endif
 
   return llwrite(packet, dataSize + 4);
 }
@@ -99,17 +105,20 @@ int receiveStartControlPacket(const unsigned char *packet,
   }
 
   unsigned char filenameSize = packet[filesizeSize + 4];
-  char filename[filenameSize + 1];
-  for (int i = 0; i < filenameSize; i++) {
-    filename[i] = packet[filesizeSize + 5 + i];
+  if (filenameSize + 1 > MAXFILESIZE) {
+    perror("Filename too big.\n");
+    return 1;
   }
-  filename[filenameSize] = '\0';
-  metadata->filename = filename;
+  for (int i = 0; i < filenameSize; i++) {
+    metadata->filename[i] = packet[filesizeSize + 5 + i];
+  }
+  metadata->filename[filenameSize] = '\0';
+
   return 0;
 }
 
 int receiveEndControlPacket(const unsigned char *packet,
-                            FileMetadata metadata) {
+                            const FileMetadata *metadata) {
   if (packet == NULL || packet[0] != 3) {
     return 1;
   }
@@ -125,7 +134,7 @@ int receiveEndControlPacket(const unsigned char *packet,
   for (size_t i = 0; i < filesizeSize; i++) {
     fileSize |= (packet[i + 3]) << (i * 8);
   }
-  if (metadata.fileSize != fileSize) {
+  if (metadata->fileSize != fileSize) {
     perror("Error: start packet filesize doesn't match end packet filesize.\n");
     return 1;
   }
@@ -141,7 +150,8 @@ int receiveEndControlPacket(const unsigned char *packet,
     filename[i] = packet[filesizeSize + 5 + i];
   }
   filename[filenameSize] = '\0';
-  if (metadata.filename != filename) {
+  if (strcmp(metadata->filename, filename) != 0) {
+    printf("original: %s, new: %s\n", metadata->filename, filename);
     perror("Error: start packet filename doesn't match end packet filename.\n");
     return 1;
   }
@@ -156,12 +166,14 @@ int receiveDataPacket(unsigned char *packet, int *packetSize) {
   *packetSize = packet[2] * 256 + packet[3];
 
   packet += 4;
-  printf("Data packet with size %d\n", *packetSize);
 
+#ifdef DEBUG
+  printf("Data packet with size %d\n", *packetSize);
   for (int i = 0; i < *packetSize; i++) {
     printf("%02x ", packet[i]);
   }
   printf("\n");
+#endif
 
   return 0;
 }
@@ -233,7 +245,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
   }
 
   if (linkLayer.role == LlRx) {
-    FileMetadata fileMetadata = {0, ""};
 
     unsigned char packet[1020]; // the data packet should be at most 1000, but
                                 // lets add 20 to be sure.
@@ -270,33 +281,35 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
           return;
         }
 
-        printf("name: %s, size: %zu\n", fileMetadata.filename,
-               fileMetadata.fileSize);
+        printf("Metadata received:\n\tfilename: %s\n\tsize: %zu bytes\n",
+               fileMetadata.filename, fileMetadata.fileSize);
       } else if (packet[0] == 3) {
         // End control packet
-        if (receiveEndControlPacket(packet, fileMetadata)) {
+        if (receiveEndControlPacket(packet, &fileMetadata)) {
           perror("Error reading end control packet.\n");
           fclose(fptr);
           llclose(FALSE);
           return;
         }
+        printf("End control packet received, file metadata matches.\n");
         receiving = 0;
 
       } else if (packet[0] == 2) {
         // Data packet
-
         if (receiveDataPacket(packet, &bytesRead)) {
           perror("Error reading data packet.\n");
           fclose(fptr);
           llclose(FALSE);
           return;
         }
-        printf("aaaaaData packet with size %d\n", bytesRead);
 
+#ifdef DEBUG
+        printf("Data packet with size %d\n", bytesRead);
         for (int i = 0; i < bytesRead + 4; i++) {
           printf("%02x ", packet[i]);
         }
         printf("\n");
+#endif
         fwrite(packet + 4, 1, bytesRead, fptr);
       }
     }

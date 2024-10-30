@@ -78,9 +78,6 @@ int stuffPacket(const unsigned char *packet, size_t packetSize,
       newPacket[newPacketIndex++] = 0x7D;
       newPacket[newPacketIndex] = 0x5D;
     } else {
-      // printf("no flag detected, copying from index %zd (%02x) to index %zd
-      // (%02x) \n", packetIndex, packet[packetIndex], newPacketIndex,
-      // newPacket[newPacketIndex]);
       newPacket[newPacketIndex] = packet[packetIndex];
     }
   }
@@ -367,17 +364,13 @@ int llwrite(const unsigned char *buf, int bufSize) {
       case START:
         receivedA = 0;
         receivedC = 0;
-        if (byte == 0x7E) {
-          printf("received flag\n");
-          ;
+        if (byte == 0x7E)
           currentState = FLAG_RCV;
-        }
         break;
       case FLAG_RCV:
         if (byte == 0x7E)
           continue;
         if (byte == 0x03) {
-          printf("received A\n");
           receivedA = byte;
           currentState = A_RCV;
         } else {
@@ -386,7 +379,6 @@ int llwrite(const unsigned char *buf, int bufSize) {
         break;
       case A_RCV:
         if (byte == RR0 || byte == RR1 || byte == REJ0 || byte == REJ1) {
-          printf("received C\n");
           receivedC = byte;
           currentState = C_RCV;
         } else if (byte == 0x7E)
@@ -404,7 +396,6 @@ int llwrite(const unsigned char *buf, int bufSize) {
         break;
       case BCC_OK:
         if (byte == 0x7E) {
-          printf("received final flag.\n");
           currentState = STOP;
         } else
           currentState = START;
@@ -414,7 +405,7 @@ int llwrite(const unsigned char *buf, int bufSize) {
       }
     }
     if (currentState == STOP) {
-      printf("received response\n");
+      printf("Received response.\n");
       // TODO: reject based on information number (currently using same reject
       // for both)
       if (receivedC == REJ0 || receivedC == REJ1) {
@@ -469,16 +460,13 @@ int llread(unsigned char *packet) {
       case START:
         receivedC = 0;
         receivedA = 0;
-        if (byte == 0x7E) {
-          printf("received flag\n");
+        if (byte == 0x7E)
           currentState = FLAG_RCV;
-        }
         break;
       case FLAG_RCV:
         if (byte == 0x7E)
           continue;
         if (byte == 0x03) {
-          printf("received A: %02x\n", byte);
           receivedA = byte;
           currentState = A_RCV;
         } else
@@ -486,7 +474,6 @@ int llread(unsigned char *packet) {
         break;
       case A_RCV:
         if (byte == 0x00 || byte == 0x80) {
-          printf("received C: %02x\n", byte);
           receivedC = byte;
           currentState = C_RCV;
         } else if (byte == 0x7E)
@@ -496,7 +483,6 @@ int llread(unsigned char *packet) {
         break;
       case C_RCV:
         if (byte == (receivedC ^ receivedA)) {
-          printf("received bcc1: %02x\n", byte);
           currentState = DATA;
         } else if (byte == 0x7E)
           currentState = FLAG_RCV;
@@ -520,12 +506,10 @@ int llread(unsigned char *packet) {
           if (bcc2 == receivedBCC2) {
             // if the current frame is 0, ready to receive 1.
             responseC = (receivedC == 0x00) ? RR1 : RR0;
-            printf("BCC2 matches, approving with %02x\n", responseC);
+            printf("BCC2 matches, approving with 0x%02x\n", responseC);
           } else {
             responseC = (receivedC == 0x00) ? REJ0 : REJ1;
-            printf("received bcc2: %02x", receivedBCC2);
-            printf("calculated bcc2: %02x", bcc2);
-            printf("BCC2 doesn't match, rejecting with %02x\n", responseC);
+            printf("BCC2 doesn't match, rejecting with 0x%02x\n", responseC);
             if (sendControlFrame(0x03, responseC))
               return -1;
             return 0;

@@ -18,6 +18,11 @@ BAUD_RATE = 9600
 TX_FILE = penguin.gif
 RX_FILE = penguin-received.gif
 
+# remove later
+ifdef DEBUG
+	CFLAGS += -DDEBUG
+endif
+
 # Targets
 .PHONY: all
 all: $(BIN)/main $(BIN)/cable
