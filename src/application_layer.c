@@ -2,6 +2,7 @@
 
 #include "../include/application_layer.h"
 #include "../include/link_layer.h"
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -158,11 +159,19 @@ int receiveEndControlPacket(const unsigned char *packet,
   return 0;
 }
 
-int receiveDataPacket(unsigned char *packet, int *packetSize) {
+int receiveDataPacket(unsigned char *packet, int *packetSize,
+                      int expectedSequenceNumber) {
 
   if (packet == NULL || packetSize == NULL || packet[0] != 2) {
     return 1;
   }
+
+  if (packet[1] != expectedSequenceNumber) {
+    printf(
+        "The data packet received contains an unexpected sequence number.\n");
+    return 1;
+  }
+
   *packetSize = packet[2] * 256 + packet[3];
 
   packet += 4;
@@ -259,6 +268,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     }
 
     int receiving = 1;
+    int sequenceNumber = 0;
 
     while (receiving) {
       int bytesRead = llread(packet);
@@ -296,7 +306,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
       } else if (packet[0] == 2) {
         // Data packet
-        if (receiveDataPacket(packet, &bytesRead)) {
+        if (receiveDataPacket(packet, &bytesRead, sequenceNumber++)) {
           perror("Error reading data packet.\n");
           fclose(fptr);
           llclose(FALSE);
