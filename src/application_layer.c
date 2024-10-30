@@ -232,7 +232,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
       }
     }
 
-    if (sendControlPacket(filename, 3, fileSize)) {
+    if (sendControlPacket(filename, 3, fileSize) < 0) {
       perror("Error sending the end control packet.\n");
       fclose(fptr);
       llclose(FALSE);
