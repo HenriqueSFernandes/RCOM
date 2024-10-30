@@ -406,18 +406,17 @@ int llwrite(const unsigned char *buf, int bufSize) {
     }
     if (currentState == STOP) {
       printf("Received response.\n");
-      // TODO: reject based on information number (currently using same reject
-      // for both)
-      if (receivedC == REJ0 || receivedC == REJ1) {
-        alarmEnabled = TRUE;
-        alarmCount = 0;
-        printf("Packet rejected by receiver, trying again...\n");
-      }
-      if (receivedC == RR0 || receivedC == RR1) {
+      // if the information number is 0, it means the packet was sent with
+      // information number 0x80, thus it is expecting a RR0.
+      if ((informationFrameNumber == 0 && receivedC == RR0) ||
+          (informationFrameNumber == 0x80 && receivedC == RR1)) {
         printf("Packet accepted by receiver, proceding to the next.\n");
         disableAlarm();
         return stuffedPacketSize;
       }
+      alarmEnabled = TRUE;
+      alarmCount = 0;
+      printf("Packet rejected by receiver, trying again...\n");
     }
     // Verify if the alarm fired
     if (alarmEnabled) {
