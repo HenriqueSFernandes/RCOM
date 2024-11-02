@@ -2,22 +2,33 @@
 
 #include "../include/application_layer.h"
 #include "../include/link_layer.h"
-#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#define MAXFILESIZE 256
+#define MAXFILENAMESIZE 256
 
 typedef struct {
   size_t fileSize;
-  char filename[MAXFILESIZE];
+  char filename[MAXFILENAMESIZE];
 } FileMetadata;
 
 FileMetadata fileMetadata = {0, ""};
 
+/**
+ * @brief Generates a hexdump of the specified file.
+ *
+ * This function constructs a command to generate a hexdump of the file
+ * specified by the filename parameter and executes it using the system
+ * function. The hexdump command used is "hexdump -C <filename>".
+ * Useful for debugging purposes.
+ *
+ * @param filename The path to the file to be hexdumped.
+ * @return Returns 0 on success, or 1 if an error occurs while executing the
+ * hexdump command.
+ */
 int hexdump(const char *filename) {
   char command[256];
   snprintf(command, sizeof(command), "hexdump -C %s", filename);
@@ -30,6 +41,18 @@ int hexdump(const char *filename) {
   return 0;
 }
 
+/**
+ * @brief Sends a control packet containing the file size and filename.
+ *
+ * This function constructs a control packet with the specified control value,
+ * file size, and filename, and sends it using the llwrite function.
+ *
+ * @param filename The name of the file to be included in the control packet.
+ * @param controlValue The control value indicating the type of control packet.
+ *                     Typically, 1 for start and 3 for end.
+ * @param fileSize The size of the file to be included in the control packet.
+ * @return int Returns 0 on success, or -1 if the filename is NULL.
+ */
 int sendControlPacket(const char *filename, unsigned char controlValue,
                       size_t fileSize) {
   if (filename == NULL) {
@@ -56,6 +79,24 @@ int sendControlPacket(const char *filename, unsigned char controlValue,
   return llwrite(packet, 5 + L1 + L2);
 }
 
+/**
+ * @brief Sends a data packet.
+ *
+ * This function constructs a data packet with the given data and sequence
+ * number, and sends it using the `llwrite` function. The packet format is as
+ * follows:
+ * - Byte 0: Control field (2 for data)
+ * - Byte 1: Sequence number
+ * - Byte 2: Data size (most significant byte)
+ * - Byte 3: Data size (least significant byte)
+ * - Bytes 4 to (dataSize + 3): Data
+ *
+ * @param data Pointer to the data to be sent.
+ * @param dataSize Size of the data to be sent.
+ * @param sequenceNumber Sequence number of the packet.
+ * @return 0 on success, -1 if the data pointer is NULL, or the return value of
+ * `llwrite`.
+ */
 int sendDataPacket(unsigned char *data, size_t dataSize, int sequenceNumber) {
   if (data == NULL) {
     return -1;
@@ -80,6 +121,27 @@ int sendDataPacket(unsigned char *data, size_t dataSize, int sequenceNumber) {
   return llwrite(packet, dataSize + 4);
 }
 
+/**
+ * @brief Receives and parses a start control packet to extract file metadata.
+ *
+ * This function processes a start control packet to extract the file size and
+ * file name, storing them in the provided metadata structure. The packet is
+ * expected to follow a specific format:
+ * - The first byte should be 1, indicating a start control packet.
+ * - The second byte should be 0, indicating the file size parameter.
+ * - The third byte indicates the size (in octets) of the file size value.
+ * - The next bytes contain the file size value.
+ * - The byte following the file size should be 1, indicating the file name
+ * parameter.
+ * - The next byte indicates the size of the file name.
+ * - The remaining bytes contain the file name.
+ *
+ * @param packet Pointer to the start control packet.
+ * @param metadata Pointer to the FileMetadata structure where the extracted
+ *                 file size and file name will be stored.
+ * @return int Returns 0 on success, or 1 on error (e.g., invalid packet format,
+ *             filename too big).
+ */
 int receiveStartControlPacket(const unsigned char *packet,
                               FileMetadata *metadata) {
   if (packet == NULL || packet[0] != 1) {
@@ -106,7 +168,7 @@ int receiveStartControlPacket(const unsigned char *packet,
   }
 
   unsigned char filenameSize = packet[filesizeSize + 4];
-  if (filenameSize + 1 > MAXFILESIZE) {
+  if (filenameSize + 1 > MAXFILENAMESIZE) {
     perror("Filename too big.\n");
     return 1;
   }
@@ -118,6 +180,17 @@ int receiveStartControlPacket(const unsigned char *packet,
   return 0;
 }
 
+/**
+ * @brief Receives and validates the end control packet.
+ *
+ * This function checks the integrity of the end control packet by verifying
+ * the packet type, file size, and file name against the provided metadata.
+ *
+ * @param packet Pointer to the end control packet.
+ * @param metadata Pointer to the FileMetadata structure containing the expected
+ * file size and file name.
+ * @return int Returns 0 if the packet is valid, otherwise returns 1.
+ */
 int receiveEndControlPacket(const unsigned char *packet,
                             const FileMetadata *metadata) {
   if (packet == NULL || packet[0] != 3) {
@@ -152,13 +225,26 @@ int receiveEndControlPacket(const unsigned char *packet,
   }
   filename[filenameSize] = '\0';
   if (strcmp(metadata->filename, filename) != 0) {
-    printf("original: %s, new: %s\n", metadata->filename, filename);
     perror("Error: start packet filename doesn't match end packet filename.\n");
     return 1;
   }
   return 0;
 }
 
+/**
+ * @brief Receives a data packet and validates its contents.
+ *
+ * This function checks if the provided packet is valid, verifies the sequence
+ * number, and extracts the packet size. If the packet is valid, the size of the
+ * packet is stored in the provided packetSize pointer.
+ *
+ * @param packet Pointer to the data packet.
+ * @param packetSize Pointer to an integer where the size of the packet will be
+ * stored.
+ * @param expectedSequenceNumber The expected sequence number of the packet.
+ * @return 0 if the packet is valid and the size is successfully extracted, 1
+ * otherwise.
+ */
 int receiveDataPacket(unsigned char *packet, int *packetSize,
                       int expectedSequenceNumber) {
 

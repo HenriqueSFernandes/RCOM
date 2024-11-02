@@ -3,7 +3,6 @@
 #include "../include/link_layer.h"
 #include "../include/serial_port.h"
 #include <fcntl.h>
-#include <math.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,30 +31,58 @@ enum states {
   DATA,
 };
 
-int allRead = FALSE;
 int alarmEnabled;
 int alarmCount = 0;
 enum states current_state = START;
 LinkLayer parameters;
-unsigned char C_NS = 0;
 int fd;
 unsigned char informationFrameNumber =
     0; // Used to generate the information frame.
 
-// Increases the counter on alarm signal.
+/**
+ * @brief Signal handler for alarm signals.
+ *
+ * This function is called when an alarm signal is received. It increments the
+ * alarm count, enables the alarm flag, and prints the current alarm count.
+ *
+ * @param signal The signal number.
+ */
 void alarmHandler(int signal) {
   alarmCount++;
   alarmEnabled = TRUE;
   printf("Alarm! Count: %d\n", alarmCount);
 }
 
-/// @brief Disables alarm and resets the counter.
+/**
+ * @brief Disables the alarm.
+ *
+ * This function disables the alarm by setting the global variable
+ * `alarmEnabled` to FALSE, stopping any active alarm by calling `alarm(0)`, and
+ * resetting the `alarmCount` to 0.
+ */
 void disableAlarm() {
   alarmEnabled = FALSE;
   alarm(0);
   alarmCount = 0;
 }
 
+/**
+ * @brief Stuffs a packet by replacing FLAG and ESC bytes with escape sequences.
+ *
+ * This function processes the input packet and replaces any occurrence of the
+ * FLAG byte (0x7E) with the sequence 0x7D5E and any occurrence of the ESC byte
+ * (0x7D) with the sequence 0x7D5D. The resulting packet is stored in the
+ * provided newPacket buffer.
+ *
+ * @param packet The input packet to be stuffed.
+ * @param packetSize The size of the input packet.
+ * @param newPacket The buffer to store the stuffed packet. It should have at
+ * least double the size of the input packet to accommodate the worst-case
+ * scenario.
+ * @param newPacketSize A pointer to a variable where the size of the stuffed
+ * packet will be stored.
+ * @return 0 on success, 1 if any of the input pointers are NULL.
+ */
 int stuffPacket(const unsigned char *packet, size_t packetSize,
                 unsigned char *newPacket, size_t *newPacketSize) {
   // Assumes newPacket has at least double the size of the packet.
@@ -86,6 +113,19 @@ int stuffPacket(const unsigned char *packet, size_t packetSize,
   return 0;
 }
 
+/**
+ * @brief Destuffs a packet by removing escape sequences.
+ *
+ * This function processes an input packet and removes escape sequences,
+ * producing a new packet with the escape sequences removed.
+ *
+ * @param packet The input packet to be destuffed.
+ * @param packetSize The size of the input packet.
+ * @param newPacket The output buffer where the destuffed packet will be stored.
+ * @param newPacketSize A pointer to a variable where the size of the destuffed
+ * packet will be stored.
+ * @return 0 on success, 1 if any of the input pointers are NULL.
+ */
 int destuffPacket(const unsigned char *packet, size_t packetSize,
                   unsigned char *newPacket, size_t *newPacketSize) {
   if (packet == NULL || newPacket == NULL || newPacketSize == NULL) {
@@ -113,9 +153,17 @@ int destuffPacket(const unsigned char *packet, size_t packetSize,
   return 0;
 }
 
-/// @brief Sends control frame.
-/// @param A 0x03 if transmitter or reply by receiver, 0x01 otherwise.
-/// @param C 0x03 if transmitter, 0x07 if receiver.
+/**
+ * @brief Sends a control frame.
+ *
+ * This function constructs a control frame with the given address (A) and
+ * control (C) fields, calculates the Block Check Character (BCC), and sends the
+ * frame through a file descriptor.
+ *
+ * @param A The address field of the control frame.
+ * @param C The control field of the control frame.
+ * @return int Returns 0 on success, or -1 on failure.
+ */
 int sendControlFrame(unsigned char A, unsigned char C) {
   unsigned char frame[5] = {0x7E, A, C, 0, 0x7E};
   frame[3] = frame[1] ^ frame[2];
@@ -127,9 +175,18 @@ int sendControlFrame(unsigned char A, unsigned char C) {
   return 0;
 }
 
-/// @brief Receives a control frame.
-/// @param expectedA Expected A.
-/// @param expectedC Expected C.
+/**
+ * @brief Receives a control frame and validates it against expected values.
+ *
+ * This function reads bytes from a file descriptor and processes them to
+ * validate a control frame. The frame is validated based on the expected
+ * address (A) and control (C) values provided as arguments.
+ *
+ * @param expectedA The expected address byte of the control frame.
+ * @param expectedC The expected control byte of the control frame.
+ * @return int Returns 0 on successful reception and validation of the control
+ * frame, or -1 if an error occurs during reading.
+ */
 int receiveControlFrame(unsigned char expectedA, unsigned char expectedC) {
   enum states currentState = START;
 
@@ -183,12 +240,23 @@ int receiveControlFrame(unsigned char expectedA, unsigned char expectedC) {
   return 0;
 }
 
-/// @brief Sends the control frame and waits for a response, triggering
-/// retransmissions if needed.
-/// @param A A to send.
-/// @param C C to send.
-/// @param expectedA Expected A.
-/// @param expectedC Expected C.
+/**
+ * @brief Sends a control frame and waits for an acknowledgment.
+ *
+ * This function sends a control frame with the specified address (A) and
+ * control (C) fields, and waits for an acknowledgment frame with the expected
+ * address (expectedA) and control (expectedC) fields. It uses a state machine
+ * to process the received bytes and verify the acknowledgment. If the
+ * acknowledgment is not received within the specified timeout, the control
+ * frame is retransmitted.
+ *
+ * @param A The address field of the control frame to be sent.
+ * @param C The control field of the control frame to be sent.
+ * @param expectedA The expected address field of the acknowledgment frame.
+ * @param expectedC The expected control field of the acknowledgment frame.
+ * @return int Returns 0 if the acknowledgment is received successfully, -1
+ * otherwise.
+ */
 int sendControlAndAwaitAck(unsigned char A, unsigned char C,
                            unsigned char expectedA, unsigned char expectedC) {
   enum states currentState = START;
