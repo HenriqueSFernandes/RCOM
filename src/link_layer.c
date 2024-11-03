@@ -603,6 +603,7 @@ int llread(unsigned char *packet) {
 // LLCLOSE
 ////////////////////////////////////////////////
 int llclose(int showStatistics) {
+  printf("Attempting to close connection...\n");
   // Transmitter sends disc, receiver sends disc and waits for response.
   if (parameters.role == LlTx) {
     // Sends A=0x03 and C=0x0B, waits for response A=0x01, C=0x0B (disconnect
