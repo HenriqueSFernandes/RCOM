@@ -35,12 +35,16 @@ enum states {
 };
 
 typedef struct {
-  int nBytes;
-  int nFrames;
-  struct timespec start;
+  int nBytes;                      // Totla bytes sent / received.
+  int rejectedBytes;               // Bytes that were rejected.
+  int nFrames;                     // Total number of frames sent / received.
+  int rejectedFrames;              // Number of rejected frames.
+  size_t filesize;                 // Size of the file, hardcoded.
+  struct timespec globalStart;     // Registered when `llopen()` is called.
+  struct timespec connectionStart; // Registered when `llopen() finishes.`
 } Statistics;
 
-Statistics statistics = {0, 0, 0};
+Statistics statistics = {0, 0, 0, 0, 10968, 0, 0};
 int alarmEnabled;
 int alarmCount = 0;
 enum states current_state = START;
@@ -342,20 +346,54 @@ int sendControlAndAwaitAck(unsigned char A, unsigned char C,
   return -1;
 }
 
+void sendFilesize(size_t filesize) { statistics.filesize = filesize; }
+
 void printStatistics() {
   struct timespec end;
   clock_gettime(CLOCK_MONOTONIC, &end);
+  float globalDuration = (end.tv_sec - statistics.globalStart.tv_sec) +
+                         (end.tv_nsec - statistics.globalStart.tv_nsec) / 1e9;
+  float duration = (end.tv_sec - statistics.connectionStart.tv_sec) +
+                   (end.tv_nsec - statistics.connectionStart.tv_nsec) / 1e9;
   printf("\nSTATISTICS\n");
-  printf("Role: %s\n", parameters.role == LlTx ? "Transmitter" : "Receiver");
+  printf("\tRole: %s\n", parameters.role == LlTx ? "Transmitter" : "Receiver");
   if (parameters.role == LlTx) {
-    printf("Duration: %fs\n",
-           (end.tv_sec - statistics.start.tv_sec) +
-               (end.tv_nsec - statistics.start.tv_nsec) / 1e9);
-    printf("Frames sent: %d\n", statistics.nFrames);
-    printf("Bytes sent: %d\n", statistics.nBytes);
+    printf("\tGlobal duration: %fs\n", globalDuration);
+    printf("\tTransmission duration: %fs\n", duration);
+    printf("\tFrames sent: %d\n", statistics.nFrames);
+    printf("\tAccepted frames: %d\n",
+           statistics.nFrames - statistics.rejectedFrames);
+    printf("\tRejected frames: %d\n", statistics.rejectedFrames);
+    printf("\tBytes sent: %d\n", statistics.nBytes);
+    printf("\tAccepted bytes: %d\n",
+           statistics.nBytes - statistics.rejectedBytes);
+    printf("\tRejected bytes: %d\n", statistics.rejectedBytes);
+    printf("\tAverage frame size: %f bytes\n",
+           (float)statistics.nBytes / statistics.nFrames);
+    printf("\tSpeed: %f bit/s (filesize divided by time)\n",
+           statistics.filesize * 8.0 / duration);
+    printf("\tEfficienty: %f%% (speed / baudrate)\n",
+           (statistics.filesize * 8.0 / duration) / (parameters.baudRate) *
+               100);
   } else if (parameters.role == LlRx) {
-    printf("Frames received: %d\n", statistics.nFrames);
-    printf("Bytes received: %d\n", statistics.nBytes);
+    printf("\tGlobal duration: %fs\n", globalDuration);
+    printf("\tTransmission duration: %fs\n", duration);
+    printf("\tFrames received: %d\n",
+           statistics.nFrames + statistics.rejectedFrames);
+    printf("\tAccepted frames: %d\n", statistics.nFrames);
+    printf("\tRejected frames: %d\n", statistics.rejectedFrames);
+    printf("\tBytes received: %d\n", statistics.nBytes);
+    printf("\tAccepted bytes: %d\n",
+           statistics.nBytes - statistics.rejectedBytes);
+    printf("\tRejected bytes: %d\n", statistics.rejectedBytes);
+    printf("\tAverage frame size: %f bytes\n",
+           (float)statistics.nBytes /
+               (statistics.nFrames + statistics.rejectedFrames));
+    printf("\tSpeed: %f bit/s (filesize divided by time)\n",
+           statistics.filesize * 8.0 / duration);
+    printf("\tEfficienty: %f%% (speed / baudrate)\n",
+           (statistics.filesize * 8.0 / duration) / (parameters.baudRate) *
+               100);
   }
 }
 
@@ -365,7 +403,7 @@ void printStatistics() {
 int llopen(LinkLayer connectionParameters) {
   parameters = connectionParameters;
   (void)signal(SIGALRM, alarmHandler);
-  clock_gettime(CLOCK_MONOTONIC, &statistics.start);
+  clock_gettime(CLOCK_MONOTONIC, &statistics.globalStart);
 
   fd = openSerialPort(connectionParameters.serialPort,
                       connectionParameters.baudRate);
@@ -395,6 +433,7 @@ int llopen(LinkLayer connectionParameters) {
            "successfully.\n");
   }
 
+  clock_gettime(CLOCK_MONOTONIC, &statistics.connectionStart);
   return 0;
 }
 
@@ -518,6 +557,8 @@ int llwrite(const unsigned char *buf, int bufSize) {
       }
       alarmEnabled = TRUE;
       alarmCount = 0;
+      statistics.rejectedFrames++;
+      statistics.rejectedBytes += stuffedPacketSize;
       printf("Packet rejected by receiver, trying again...\n");
     }
     // Verify if the alarm fired
@@ -615,6 +656,8 @@ int llread(unsigned char *packet) {
           } else {
             responseC = (receivedC == 0x00) ? REJ0 : REJ1;
             printf("BCC2 doesn't match, rejecting with 0x%02x\n", responseC);
+            statistics.rejectedFrames++;
+            statistics.rejectedBytes += packetIndex + 5;
             if (sendControlFrame(0x03, responseC))
               return -1;
             return 0;
@@ -665,7 +708,6 @@ int llclose(int showStatistics) {
     printf("Disconnected!\n");
   }
 
-  printf("show: %d\n", showStatistics);
   if (showStatistics) {
     printStatistics();
   }
