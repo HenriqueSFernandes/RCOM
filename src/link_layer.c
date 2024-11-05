@@ -2,6 +2,8 @@
 
 #include "../include/link_layer.h"
 #include "../include/serial_port.h"
+#include <bits/time.h>
+#include <bits/types/struct_timeval.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -10,6 +12,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 // MISC
@@ -31,6 +34,13 @@ enum states {
   DATA,
 };
 
+typedef struct {
+  int nBytes;
+  int nFrames;
+  struct timespec start;
+} Statistics;
+
+Statistics statistics = {0, 0, 0};
 int alarmEnabled;
 int alarmCount = 0;
 enum states current_state = START;
@@ -332,12 +342,30 @@ int sendControlAndAwaitAck(unsigned char A, unsigned char C,
   return -1;
 }
 
+void printStatistics() {
+  struct timespec end;
+  clock_gettime(CLOCK_MONOTONIC, &end);
+  printf("\nSTATISTICS\n");
+  printf("Role: %s\n", parameters.role == LlTx ? "Transmitter" : "Receiver");
+  if (parameters.role == LlTx) {
+    printf("Duration: %fs\n",
+           (end.tv_sec - statistics.start.tv_sec) +
+               (end.tv_nsec - statistics.start.tv_nsec) / 1e9);
+    printf("Frames sent: %d\n", statistics.nFrames);
+    printf("Bytes sent: %d\n", statistics.nBytes);
+  } else if (parameters.role == LlRx) {
+    printf("Frames received: %d\n", statistics.nFrames);
+    printf("Bytes received: %d\n", statistics.nBytes);
+  }
+}
+
 ////////////////////////////////////////////////
 // LLOPEN
 ////////////////////////////////////////////////
 int llopen(LinkLayer connectionParameters) {
   parameters = connectionParameters;
   (void)signal(SIGALRM, alarmHandler);
+  clock_gettime(CLOCK_MONOTONIC, &statistics.start);
 
   fd = openSerialPort(connectionParameters.serialPort,
                       connectionParameters.baudRate);
@@ -350,6 +378,8 @@ int llopen(LinkLayer connectionParameters) {
     // A=0x03 and C=0x07.
     if (sendControlAndAwaitAck(0x03, 0x03, 0x03, 0x07))
       return -1;
+    statistics.nFrames++;
+    statistics.nBytes += 5;
     printf("Control frame sent and received correctly, connection established "
            "successfully.\n");
   } else {
@@ -359,6 +389,8 @@ int llopen(LinkLayer connectionParameters) {
     // Responds with a control frame with A=0x03 and C=0x07.
     if (sendControlFrame(0x03, 0x07))
       return -1;
+    statistics.nFrames++;
+    statistics.nBytes += 5;
     printf("Control frame received and sent correctly, connection established "
            "successfully.\n");
   }
@@ -409,6 +441,8 @@ int llwrite(const unsigned char *buf, int bufSize) {
     perror("Error writing stuffed packet.\n");
     return -1;
   }
+  statistics.nFrames++;
+  statistics.nBytes += stuffedPacketSize;
   printf("Packet sent!\n");
 
   // Verify response
@@ -495,6 +529,8 @@ int llwrite(const unsigned char *buf, int bufSize) {
           perror("Error writing stuffed packet.\n");
           return -1;
         }
+        statistics.nFrames++;
+        statistics.nBytes += stuffedPacketSize;
         alarm(parameters.timeout);
       }
       currentState = START;
@@ -523,6 +559,7 @@ int llread(unsigned char *packet) {
       return -1;
     }
     if (bytes > 0) {
+      statistics.nBytes++;
       switch (currentState) {
       case START:
         receivedC = 0;
@@ -560,6 +597,7 @@ int llread(unsigned char *packet) {
         if (byte == 0x7E) {
           unsigned char destuffedPacket[packetIndex];
           size_t destuffedPacketSize;
+
           if (destuffPacket(packet, packetIndex, destuffedPacket,
                             &destuffedPacketSize)) {
             return -1;
@@ -585,6 +623,7 @@ int llread(unsigned char *packet) {
             return -1;
           }
           memcpy(packet, destuffedPacket, destuffedPacketSize - 1);
+          statistics.nFrames++;
           return destuffedPacketSize - 1; // -1 to remove BCC2
         } else {
           packet[packetIndex++] = byte;
@@ -608,20 +647,28 @@ int llclose(int showStatistics) {
   if (parameters.role == LlTx) {
     // Sends A=0x03 and C=0x0B, waits for response A=0x01, C=0x0B (disconnect
     // frames).
-    if (sendControlAndAwaitAck(0x03, 0x0B, 0x01, 0x0B))
+    if (sendControlAndAwaitAck(0x03, 0x0B, 0x01, 0x0B) < 0)
       return closeSerialPort();
-    if (sendControlFrame(0x01, 0x07))
+    if (sendControlFrame(0x01, 0x07) < 0)
       return closeSerialPort();
+    statistics.nFrames += 2;
+    statistics.nBytes += 10;
     printf("Disconnected!\n");
 
   } else if (parameters.role == LlRx) {
-    if (receiveControlFrame(0x03, 0x0B))
+    if (receiveControlFrame(0x03, 0x0B) < 0)
       return closeSerialPort();
-    if (sendControlAndAwaitAck(0x01, 0x0B, 0x01, 0x07))
+    if (sendControlAndAwaitAck(0x01, 0x0B, 0x01, 0x07) < 0)
       return closeSerialPort();
+    statistics.nFrames += 2;
+    statistics.nBytes += 10;
     printf("Disconnected!\n");
   }
 
+  printf("show: %d\n", showStatistics);
+  if (showStatistics) {
+    printStatistics();
+  }
   int clstat = closeSerialPort();
   return clstat;
 }
