@@ -372,7 +372,7 @@ void printStatistics() {
            (float)statistics.nBytes / statistics.nFrames);
     printf("\tSpeed: %f bit/s (filesize divided by time)\n",
            statistics.filesize * 8.0 / duration);
-    printf("\tEfficienty: %f%% (speed / baudrate)\n",
+    printf("\tEfficiency: %f%% (speed / baudrate)\n",
            (statistics.filesize * 8.0 / duration) / (parameters.baudRate) *
                100);
   } else if (parameters.role == LlRx) {
@@ -391,7 +391,7 @@ void printStatistics() {
                (statistics.nFrames + statistics.rejectedFrames));
     printf("\tSpeed: %f bit/s (filesize divided by time)\n",
            statistics.filesize * 8.0 / duration);
-    printf("\tEfficienty: %f%% (speed / baudrate)\n",
+    printf("\tEfficiency: %f%% (speed / baudrate)\n",
            (statistics.filesize * 8.0 / duration) / (parameters.baudRate) *
                100);
   }
