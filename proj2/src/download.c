@@ -205,6 +205,26 @@ int read_response(const int socket_fd, char *response, int *response_code) {
   }
   printf("Response code: %d\n", *response_code);
   printf("Response: %s\n", response);
+  flush_socket(socket_fd);
 
+  return 0;
+}
+
+int flush_socket(const int socket_fd) {
+  char buffer[1024];
+  while (read(socket_fd, buffer, sizeof(buffer)) > 0) {
+    // Do nothing.
+  }
+  return 0;
+}
+
+int send_message(const int socket_fd, const char *message) {
+  if (message == NULL) {
+    return -1;
+  }
+  if (write(socket_fd, message, strlen(message)) < 0) {
+    perror("Error writing to the socket.\n");
+    return -1;
+  }
   return 0;
 }

@@ -13,7 +13,10 @@ BIN = bin/
 
 # PUBLIC SERVERS
 
-URL = ftp://demo:password@test.rebex.net/pub/example/readme.txt
+# URL = ftp://ftp.scene.org/welcome.msg
+
+# LOCAL SERVER
+URL = ftp://user:12345@localhost:2121/README.txt
 
 
 all: $(BIN)/download

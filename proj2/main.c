@@ -1,5 +1,6 @@
 #include "include/download.h"
 #include <stdio.h>
+#include <unistd.h>
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
@@ -27,6 +28,9 @@ int main(int argc, char *argv[]) {
   char response[1024] = "";
   int response_code = 0;
   read_response(socket1, response, &response_code);
+  send_message(socket1, "USER anonymous\r\n");
+  read_response(socket1, response, &response_code);
+
 
   return 0;
 }
