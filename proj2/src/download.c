@@ -14,6 +14,7 @@ void print_url_info(UrlInfo *info) {
   printf("User: %s\n", info->user);
   printf("Password: %s\n", info->password);
   printf("Host: %s\n", info->host);
+  printf("IP: %s\n", info->ip);
   printf("Port: %d\n", info->port);
   printf("Path: %s\n", info->path);
 }
@@ -33,7 +34,6 @@ int parse_url(char *host, UrlInfo *info) {
   const char *cursor = host + strlen(prefix);
 
   memset(info, 0, sizeof(UrlInfo));
-  info->port = 21; // TODO: fetch the port from the url.
 
   // Get the username and, optionally, the password.
   const char *at = strchr(cursor, '@');
@@ -59,6 +59,7 @@ int parse_url(char *host, UrlInfo *info) {
     info->port = atoi(colon + 1);
   } else {
     // Host (no port)
+    info->port = 21;
     if (slash) {
       strncpy(info->host, cursor, slash - cursor);
     } else {
@@ -73,10 +74,15 @@ int parse_url(char *host, UrlInfo *info) {
     strcpy(info->path, "/"); // If the path is empty, use the root directory.
   }
 
+  // Get the ip address.
+  if (get_ip(info->host, info->ip) != 0) {
+    return -1;
+  }
+
   return 0;
 }
 
-int get_ip(char *host) {
+int get_ip(char *host, char *ip) {
 
   struct hostent *h;
   if ((h = gethostbyname(host)) == NULL) {
@@ -84,9 +90,12 @@ int get_ip(char *host) {
     return -1;
   }
 
-  printf("Host name  : %s\n", h->h_name);
-  printf("IP Address : %s\n", inet_ntoa(*((struct in_addr *)h->h_addr)));
-
+  const char *resolved_ip = inet_ntoa(*((struct in_addr *)h->h_addr));
+  if (resolved_ip == NULL) {
+    perror("Failed to get the ip address.\n");
+    return -1;
+  }
+  strcpy(ip, resolved_ip);
   return 0;
 }
 
