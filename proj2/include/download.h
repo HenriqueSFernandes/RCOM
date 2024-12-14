@@ -14,7 +14,6 @@ typedef struct {
 enum state {
   CODE,    // Receiving a code
   MESSAGE, // Receiving a message
-  HIPHEN,  // When there is a '-' between the code and the message
   STOP
 };
 

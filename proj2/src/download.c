@@ -11,13 +11,15 @@
 #include <string.h>
 
 void print_url_info(UrlInfo *info) {
-  printf("User: %s\n", info->user);
-  printf("Password: %s\n", info->password);
-  printf("Host: %s\n", info->host);
-  printf("IP: %s\n", info->ip);
-  printf("Port: %d\n", info->port);
-  printf("Path: %s\n", info->path);
-  printf("Filename: %s\n", info->filename);
+  printf("\n========== URL Information ==========\n");
+  printf("User      : %s\n", strlen(info->user) ? info->user : "N/A");
+  printf("Password  : %s\n", strlen(info->password) ? info->password : "N/A");
+  printf("Host      : %s\n", strlen(info->host) ? info->host : "N/A");
+  printf("IP        : %s\n", strlen(info->ip) ? info->ip : "N/A");
+  printf("Port      : %d\n", info->port);
+  printf("Path      : %s\n", strlen(info->path) ? info->path : "/");
+  printf("Filename  : %s\n", strlen(info->filename) ? info->filename : "N/A");
+  printf("======================================\n");
 }
 
 int parse_url(char *host, UrlInfo *info) {
@@ -167,31 +169,36 @@ int read_response(const int socket_fd, char *response, int *response_code) {
 
   enum state current_state = CODE;
 
+  int message_index = 0;
+
   while (current_state != STOP) {
     char current_char = 0;
     if (read(socket_fd, &current_char, 1) < 0) {
       perror("Error reading from the socket.\n");
       return -1;
     }
-    printf("%c\n", current_char);
+    // printf("%c\n", current_char);
 
     switch (current_state) {
     case CODE:
       if (current_char == '\n') {
         current_char = STOP;
-      } else if (current_char == '-') {
-        current_state = HIPHEN;
-      } else if (current_char == ' ') {
+      } else if (current_char == ' ' || current_char == '-') {
         current_state = MESSAGE;
       } else if (current_char >= '0' && current_char <= '9') {
         *response_code = *response_code * 10 + (current_char - '0');
       }
       break;
     case MESSAGE:
+      if (current_char == '\n') {
+        response[message_index] = '\0';
+        current_state = STOP;
+      } else {
+        response[message_index++] = current_char;
+      }
+      break;
       current_state = STOP;
       break;
-    case HIPHEN:
-      current_state = STOP;
     case STOP:
       break;
     }
