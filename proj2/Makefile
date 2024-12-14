@@ -16,7 +16,11 @@ BIN = bin/
 # URL = ftp://ftp.scene.org/welcome.msg
 
 # LOCAL SERVER
-URL = ftp://user:12345@localhost:2121/README.txt
+FILE = penguin.gif
+# FILE = README.txt
+# FILE = Sebenta.pdf
+# FILE = 5mb.txt
+URL = ftp://user:12345@localhost:2121/$(FILE)
 
 
 all: $(BIN)/download
@@ -29,3 +33,6 @@ run: $(BIN)/download
 
 clean:
 	rm -f $(BIN)/download
+
+diff:
+	diff $(FILE) ftp-server/FTP/$(FILE)

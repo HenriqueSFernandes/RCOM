@@ -224,7 +224,7 @@ int read_response(const int socket_fd, char *response, int *response_code) {
   printf("Response Code   : %d\n", *response_code);
   printf("Response Message: %s\n", response);
   printf("=====================================\n");
-  // flush_socket(socket_fd);
+  flush_socket(socket_fd);
 
   return 0;
 }
@@ -372,11 +372,8 @@ int download_file(const int socket_fd1, const int socket_fd2,
     return -1;
   }
 
-  // Send the retrieve command.
-  char retrieve[1024] = "RETR ";
-  strcat(retrieve, info->path);
-  strcat(retrieve, "\r\n");
-  if (send_message(socket_fd1, retrieve) != 0) {
+  // Set the FTP mode to binary.
+  if (send_message(socket_fd1, "TYPE I\r\n") != 0) {
     return -1;
   }
 
@@ -387,13 +384,44 @@ int download_file(const int socket_fd1, const int socket_fd2,
     return -1;
   }
 
+  if (response_code != 200) {
+    perror("Error setting the FTP mode to binary.\n");
+    return -1;
+  }
+
+  // Send the retrieve command.
+  char retrieve[1024] = "RETR ";
+  strcat(retrieve, info->path);
+  strcat(retrieve, "\r\n");
+  if (send_message(socket_fd1, retrieve) != 0) {
+    return -1;
+  }
+
+  // Wait until the file finishes downloading.
+  memset(response, 0, sizeof(response));
+  response_code = 0;
+
+  if (read_response(socket_fd1, response, &response_code) != 0) {
+    return -1;
+  }
+
   if (response_code != 150 && response_code != 125) {
     perror("Error downloading the file.\n");
     return -1;
   }
 
+  response_code = 0;
+  memset(response, 0, sizeof(response));
+  do {
+    printf("here...\n");
+    fflush(stdout);
+    if (read_response(socket_fd1, response, &response_code) != 0) {
+      return -1;
+    }
+  } while (response_code != 226);
+
   // Create the file.
-  FILE *file = fopen(info->filename, "w");
+  FILE *file = fopen(info->filename, "wb");
   if (file == NULL) {
     perror("Error creating the file.\n");
     return -1;
@@ -403,6 +431,10 @@ int download_file(const int socket_fd1, const int socket_fd2,
   char buffer[1024];
   int bytes_read;
   while ((bytes_read = read(socket_fd2, buffer, sizeof(buffer))) > 0) {
+    printf("\n\n!!!!!!Bytes read: %d\n", bytes_read);
+    for (int i = 0; i < bytes_read; i++) {
+      printf("%c", buffer[i]);
+    }
     fwrite(buffer, 1, bytes_read, file);
   }
 
@@ -410,13 +442,6 @@ int download_file(const int socket_fd1, const int socket_fd2,
   fclose(file);
 
   // Read the response.
-  memset(response, 0, sizeof(response));
-  response_code = 0;
-  do {
-    if (read_response(socket_fd1, response, &response_code) != 0) {
-      return -1;
-    }
-  } while (response_code != 226);
 
   return 0;
 }
