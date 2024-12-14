@@ -219,6 +219,11 @@ int read_response(const int socket_fd, char *response, int *response_code) {
       break;
 
     case RESPONSE:
+      if (*response_code < 100) {
+        current_state = MESSAGE;
+        break;
+      }
+
       if (current_char == '\n') {
         response[message_index] = '\0';
         current_state = STOP;
@@ -235,38 +240,6 @@ int read_response(const int socket_fd, char *response, int *response_code) {
   printf("Response Code   : %d\n", *response_code);
   printf("Response Message: %s\n", response);
   printf("=====================================\n");
-  flush_socket(socket_fd);
-
-  return 0;
-}
-
-// Function definition taken from ChatGPT.
-int flush_socket(const int socket_fd) {
-  char buffer[1024];
-
-  // Set socket to non-blocking mode
-  int flags = fcntl(socket_fd, F_GETFL, 0);
-  if (flags == -1) {
-    perror("fcntl(F_GETFL)");
-    return -1;
-  }
-  if (fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-    perror("fcntl(F_SETFL, O_NONBLOCK)");
-    return -1;
-  }
-
-  // Read and discard data from the socket
-  while (1) {
-    ssize_t bytes_read = read(socket_fd, buffer, sizeof(buffer));
-
-    if (bytes_read <= 0) {
-      break;
-    }
-  }
-
-  // Reset socket to blocking mode.
-  flags = fcntl(socket_fd, F_GETFL, 0);
-  fcntl(socket_fd, F_SETFL, flags & ~O_NONBLOCK);
 
   return 0;
 }

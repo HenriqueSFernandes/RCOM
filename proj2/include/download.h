@@ -38,9 +38,6 @@ int establish_connection(const UrlInfo *info, int *socket_fd);
 // Read the response from the server.
 int read_response(const int socket_fd, char *response, int *response_code);
 
-// Flush the socket.
-int flush_socket(const int socket_fd);
-
 // Send a message to the server.
 int send_message(const int socket_fd, const char *message);
 
