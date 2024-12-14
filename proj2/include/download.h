@@ -6,9 +6,11 @@ typedef struct {
   char password[256];
   char host[256];
   char ip[256];
+  int port;
   char path[1024];
   char filename[1024];
-  int port;
+  char passive_ip[256];
+  int passive_port;
 } UrlInfo;
 
 enum state {
@@ -40,4 +42,13 @@ int flush_socket(const int socket_fd);
 
 // Send a message to the server.
 int send_message(const int socket_fd, const char *message);
+
+// Login function.
+int login(const int socket_fd, const UrlInfo *info);
+
+// Enter passive mode.
+int enter_passive_mode(const int socket_fd, UrlInfo *info);
+
+// Close the connection.
+int close_connection(const int socket_fd);
 #endif

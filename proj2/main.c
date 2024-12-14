@@ -22,15 +22,23 @@ int main(int argc, char *argv[]) {
 
   if (establish_connection(&info, &socket1) != 0) {
     perror("Error establishing connection.\n");
+    close_connection(socket1);
     return -1;
   }
 
-  char response[1024] = "";
-  int response_code = 0;
-  read_response(socket1, response, &response_code);
-  send_message(socket1, "USER anonymous\r\n");
-  read_response(socket1, response, &response_code);
+  if (login(socket1, &info) != 0) {
+    perror("Error logging in.\n");
+    close_connection(socket1);
+    return -1;
+  }
 
+  if (enter_passive_mode(socket1, &info) != 0) {
+    perror("Error entering passive mode.\n");
+    close_connection(socket1);
+    return -1;
+  }
+
+  print_url_info(&info);
 
   return 0;
 }
