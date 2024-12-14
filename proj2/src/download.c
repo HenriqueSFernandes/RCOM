@@ -17,6 +17,7 @@ void print_url_info(UrlInfo *info) {
   printf("IP: %s\n", info->ip);
   printf("Port: %d\n", info->port);
   printf("Path: %s\n", info->path);
+  printf("Filename: %s\n", info->filename);
 }
 
 int parse_url(char *host, UrlInfo *info) {
@@ -71,7 +72,21 @@ int parse_url(char *host, UrlInfo *info) {
   if (slash) {
     strcpy(info->path, slash);
   } else {
-    strcpy(info->path, "/"); // If the path is empty, use the root directory.
+    perror("No path found in the url.\n");
+    return -1;
+  }
+
+  // Get the filename.
+  const char *last_slash = strrchr(info->path, '/');
+  if (last_slash) {
+    if (*(last_slash + 1) == '\0') {
+      perror("No filename found in the url.\n");
+      return -1;
+    }
+    strcpy(info->filename, last_slash + 1);
+  } else {
+    perror("No filename found in the url.\n");
+    return -1;
   }
 
   // Get the ip address.
@@ -129,5 +144,60 @@ int connect_to_socket(const char *ip, const int port, int *socket_fd) {
   }
 
   *socket_fd = sockfd;
+  return 0;
+}
+
+int establish_connection(const UrlInfo *info, int *socket_fd) {
+  if (info == NULL || socket_fd == NULL) {
+    return -1;
+  }
+
+  if (connect_to_socket(info->ip, info->port, socket_fd) != 0) {
+    perror("Error connecting to the socket.\n");
+    return -1;
+  }
+
+  return 0;
+}
+
+int read_response(const int socket_fd, char *response, int *response_code) {
+  if (response == NULL || response_code == NULL) {
+    return -1;
+  }
+
+  enum state current_state = CODE;
+
+  while (current_state != STOP) {
+    char current_char = 0;
+    if (read(socket_fd, &current_char, 1) < 0) {
+      perror("Error reading from the socket.\n");
+      return -1;
+    }
+    printf("%c\n", current_char);
+
+    switch (current_state) {
+    case CODE:
+      if (current_char == '\n') {
+        current_char = STOP;
+      } else if (current_char == '-') {
+        current_state = HIPHEN;
+      } else if (current_char == ' ') {
+        current_state = MESSAGE;
+      } else if (current_char >= '0' && current_char <= '9') {
+        *response_code = *response_code * 10 + (current_char - '0');
+      }
+      break;
+    case MESSAGE:
+      current_state = STOP;
+      break;
+    case HIPHEN:
+      current_state = STOP;
+    case STOP:
+      break;
+    }
+  }
+  printf("Response code: %d\n", *response_code);
+  printf("Response: %s\n", response);
+
   return 0;
 }
