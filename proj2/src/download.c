@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <string.h>
@@ -428,10 +429,46 @@ int download_file(const int socket_fd1, const int socket_fd2,
   return 0;
 }
 
-int close_connection(const int socket_fd) {
-  if (close(socket_fd) < 0) {
-    perror("Error closing the connection.\n");
-    return -1;
+int close_connection(const int socket_fd1, const int socket_fd2) {
+
+  if (socket_fd2 != -1) {
+    if (send_message(socket_fd2, "QUIT\r\n") != 0) {
+      return -1;
+    }
+    if (close(socket_fd2) < 0) {
+      perror("Error closing the connection.\n");
+      return -1;
+    }
+  }
+
+  if (socket_fd1 != -1) {
+    if (send_message(socket_fd1, "QUIT\r\n") != 0) {
+      return -1;
+    }
+    char response[1024] = "";
+    int response_code = 0;
+    read_response(socket_fd1, response, &response_code);
+    if (close(socket_fd1) < 0) {
+      perror("Error closing the connection.\n");
+      return -1;
+    }
   }
   return 0;
+}
+
+void print_statistics(const UrlInfo *info, struct timespec *start_time) {
+  struct timespec end_time;
+  clock_gettime(CLOCK_MONOTONIC, &end_time);
+  double elapsed_time = (end_time.tv_sec - start_time->tv_sec) +
+                        (end_time.tv_nsec - start_time->tv_nsec) / 1e9;
+
+  FILE *fp = fopen(info->filename, "r");
+  fseek(fp, 0L, SEEK_END);
+  int size = ftell(fp);
+
+  printf("\n========== Statistics ==========\n");
+  printf("Elapsed Time : %f seconds\n", elapsed_time);
+  printf("File Size    : %d bytes\n", size);
+  printf("Transfer Rate: %.2f bytes/s\n", size / elapsed_time);
+  printf("================================\n");
 }

@@ -1,3 +1,5 @@
+#include <time.h>
+
 #ifndef DOWNLOAD_H
 #define DOWNLOAD_H
 
@@ -14,9 +16,9 @@ typedef struct {
 } UrlInfo;
 
 enum state {
-  CODE,    // Receiving response code
-  MESSAGE, // Receiving message (not the actual response)
-	RESPONSE, // Receiving the response
+  CODE,     // Receiving response code
+  MESSAGE,  // Receiving message (not the actual response)
+  RESPONSE, // Receiving the response
   STOP
 };
 
@@ -52,5 +54,8 @@ int download_file(const int socket_fd1, const int socket_fd2,
                   const UrlInfo *info);
 
 // Close the connection.
-int close_connection(const int socket_fd);
+int close_connection(const int socket_fd1, const int socket_fd2);
+
+// Print statistics.
+void print_statistics(const UrlInfo *info, struct timespec *start_time);
 #endif

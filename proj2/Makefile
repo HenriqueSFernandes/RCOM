@@ -13,7 +13,7 @@ BIN = bin/
 
 # PUBLIC SERVERS
 
-URL = ftp://ftp.scene.org/welcome.msg
+# URL = ftp://ftp.scene.org/welcome.msg
 
 # LOCAL SERVER
 # FILE = penguin.gif
@@ -22,7 +22,7 @@ FILE = Sebenta.pdf
 # FILE = 5mb.txt
 # URL = ftp://user:12345@localhost:2121/$(FILE)
 #
-# URL = ftp://anonymous:anonymous@ftp.bit.nl/speedtest/100mb.bin
+URL = ftp://anonymous:anonymous@ftp.bit.nl/speedtest/100mb.bin
 
 
 all: $(BIN)/download
