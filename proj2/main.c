@@ -10,7 +10,10 @@ int main(int argc, char *argv[]) {
   }
 
   char *host = argv[1];
-  get_ip(host);
+  UrlInfo info;
+  parse_url(host, &info);
+
+  print_url_info(&info);
 
   return 0;
 }
