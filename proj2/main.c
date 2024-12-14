@@ -40,5 +40,19 @@ int main(int argc, char *argv[]) {
 
   print_url_info(&info);
 
+  int socket2;
+  if (connect_to_socket(info.passive_ip, info.passive_port, &socket2) != 0) {
+    perror("Error connecting to the passive socket.\n");
+    close_connection(socket1);
+    return -1;
+  }
+
+  if (download_file(socket1, socket2, &info) != 0) {
+    perror("Error downloading the file.\n");
+    close_connection(socket1);
+    close_connection(socket2);
+    return -1;
+  }
+
   return 0;
 }

@@ -170,6 +170,11 @@ int establish_connection(const UrlInfo *info, int *socket_fd) {
     return -1;
   }
 
+  if (response_code != 220) {
+    perror("Error establishing connection.\n");
+    return -1;
+  }
+
   return 0;
 }
 
@@ -219,7 +224,7 @@ int read_response(const int socket_fd, char *response, int *response_code) {
   printf("Response Code   : %d\n", *response_code);
   printf("Response Message: %s\n", response);
   printf("=====================================\n");
-  flush_socket(socket_fd);
+  // flush_socket(socket_fd);
 
   return 0;
 }
@@ -276,7 +281,14 @@ int login(const int socket_fd, const UrlInfo *info) {
   }
 
   // Send the username.
-  if (send_message(socket_fd, "USER anonymous\r\n") != 0) {
+  char user[256] = "USER ";
+  if (strlen(info->user) > 0) {
+    strcat(user, info->user);
+  } else {
+    strcat(user, "anonymous");
+  }
+  strcat(user, "\r\n");
+  if (send_message(socket_fd, user) != 0) {
     return -1;
   }
 
@@ -293,17 +305,23 @@ int login(const int socket_fd, const UrlInfo *info) {
   }
 
   // Send the password if it exists.
+  char pass[256] = "PASS ";
   if (strlen(info->password) > 0) {
-    if (send_message(socket_fd, "PASS anonymous\r\n") != 0) {
-      return -1;
-    }
-    if (read_response(socket_fd, response, &response_code) != 0) {
-      return -1;
-    }
-    if (response_code != 230) {
-      perror("Error logging in.\n");
-      return -1;
-    }
+    strcat(pass, info->password);
+  } else {
+    strcat(pass, "anonymous");
+  }
+
+  strcat(pass, "\r\n");
+  if (send_message(socket_fd, pass) != 0) {
+    return -1;
+  }
+  if (read_response(socket_fd, response, &response_code) != 0) {
+    return -1;
+  }
+  if (response_code != 230) {
+    perror("Error logging in.\n");
+    return -1;
   }
 
   printf("Logged in successfully.\n");
@@ -344,6 +362,61 @@ int enter_passive_mode(const int socket_fd, UrlInfo *info) {
   sscanf(start, "(%d,%d,%d,%d,%d,%d)", &ip1, &ip2, &ip3, &ip4, &port1, &port2);
   sprintf(info->passive_ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
   info->passive_port = port1 * 256 + port2;
+
+  return 0;
+}
+
+int download_file(const int socket_fd1, const int socket_fd2,
+                  const UrlInfo *info) {
+  if (info == NULL) {
+    return -1;
+  }
+
+  // Send the retrieve command.
+  char retrieve[1024] = "RETR ";
+  strcat(retrieve, info->path);
+  strcat(retrieve, "\r\n");
+  if (send_message(socket_fd1, retrieve) != 0) {
+    return -1;
+  }
+
+  // Read the response.
+  char response[1024] = "";
+  int response_code = 0;
+  if (read_response(socket_fd1, response, &response_code) != 0) {
+    return -1;
+  }
+
+  if (response_code != 150 && response_code != 125) {
+    perror("Error downloading the file.\n");
+    return -1;
+  }
+
+  // Create the file.
+  FILE *file = fopen(info->filename, "w");
+  if (file == NULL) {
+    perror("Error creating the file.\n");
+    return -1;
+  }
+
+  // Read the file.
+  char buffer[1024];
+  int bytes_read;
+  while ((bytes_read = read(socket_fd2, buffer, sizeof(buffer))) > 0) {
+    fwrite(buffer, 1, bytes_read, file);
+  }
+
+  // Close the file.
+  fclose(file);
+
+  // Read the response.
+  memset(response, 0, sizeof(response));
+  response_code = 0;
+  do {
+    if (read_response(socket_fd1, response, &response_code) != 0) {
+      return -1;
+    }
+  } while (response_code != 226);
 
   return 0;
 }

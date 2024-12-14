@@ -49,6 +49,10 @@ int login(const int socket_fd, const UrlInfo *info);
 // Enter passive mode.
 int enter_passive_mode(const int socket_fd, UrlInfo *info);
 
+// Download the file.
+int download_file(const int socket_fd1, const int socket_fd2,
+                  const UrlInfo *info);
+
 // Close the connection.
 int close_connection(const int socket_fd);
 #endif
