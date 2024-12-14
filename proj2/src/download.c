@@ -35,7 +35,7 @@ int parse_url(char *host, UrlInfo *info) {
   // Validate the prefix.
   const char *prefix = "ftp://";
   if (strncmp(host, prefix, strlen(prefix)) != 0) {
-    fprintf(stderr, "URL does not start with 'ftp://'.\n");
+    perror("URL does not start with 'ftp://'.\n");
     return -1;
   }
   const char *cursor = host + strlen(prefix);
@@ -190,24 +190,35 @@ int read_response(const int socket_fd, char *response, int *response_code) {
 
   while (current_state != STOP) {
     char current_char = 0;
-    if (read(socket_fd, &current_char, 1) < 0) {
+    int bytes_read = read(socket_fd, &current_char, 1);
+    if (bytes_read < 0) {
       perror("Error reading from the socket.\n");
       return -1;
+    }
+    if (bytes_read == 0) {
+      break;
     }
 
     switch (current_state) {
     case CODE:
       if (current_char == '\n') {
         current_char = STOP;
-      } else if (current_char == ' ' || current_char == '-') {
+      } else if (current_char == ' ') {
+        current_state = RESPONSE;
+      } else if (current_char == '-') {
         current_state = MESSAGE;
       } else if (current_char >= '0' && current_char <= '9') {
         *response_code = *response_code * 10 + (current_char - '0');
       }
       break;
-
     case MESSAGE:
-      // printf("%x, %c\n", current_char, current_char);
+      if (current_char == '\n') {
+        current_state = CODE;
+        *response_code = 0;
+      }
+      break;
+
+    case RESPONSE:
       if (current_char == '\n') {
         response[message_index] = '\0';
         current_state = STOP;
@@ -253,7 +264,7 @@ int flush_socket(const int socket_fd) {
     }
   }
 
-  // Reset socket to blocking mode if necessary (optional)
+  // Reset socket to blocking mode.
   flags = fcntl(socket_fd, F_GETFL, 0);
   fcntl(socket_fd, F_SETFL, flags & ~O_NONBLOCK);
 
@@ -362,7 +373,6 @@ int enter_passive_mode(const int socket_fd, UrlInfo *info) {
   sscanf(start, "(%d,%d,%d,%d,%d,%d)", &ip1, &ip2, &ip3, &ip4, &port1, &port2);
   sprintf(info->passive_ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
   info->passive_port = port1 * 256 + port2;
-
   return 0;
 }
 

@@ -14,8 +14,9 @@ typedef struct {
 } UrlInfo;
 
 enum state {
-  CODE,    // Receiving a code
-  MESSAGE, // Receiving a message
+  CODE,    // Receiving response code
+  MESSAGE, // Receiving message (not the actual response)
+	RESPONSE, // Receiving the response
   STOP
 };
 
