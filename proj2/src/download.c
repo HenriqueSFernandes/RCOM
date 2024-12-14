@@ -378,7 +378,7 @@ int download_file(const int socket_fd1, const int socket_fd2,
   }
 
   // Read the response.
-  char response[1024] = "";
+  char response[8192] = "";
   int response_code = 0;
   if (read_response(socket_fd1, response, &response_code) != 0) {
     return -1;
@@ -410,16 +410,6 @@ int download_file(const int socket_fd1, const int socket_fd2,
     return -1;
   }
 
-  response_code = 0;
-  memset(response, 0, sizeof(response));
-  do {
-    printf("here...\n");
-    fflush(stdout);
-    if (read_response(socket_fd1, response, &response_code) != 0) {
-      return -1;
-    }
-  } while (response_code != 226);
-
   // Create the file.
   FILE *file = fopen(info->filename, "wb");
   if (file == NULL) {
@@ -431,11 +421,20 @@ int download_file(const int socket_fd1, const int socket_fd2,
   char buffer[1024];
   int bytes_read;
   while ((bytes_read = read(socket_fd2, buffer, sizeof(buffer))) > 0) {
-    printf("\n\n!!!!!!Bytes read: %d\n", bytes_read);
-    for (int i = 0; i < bytes_read; i++) {
-      printf("%c", buffer[i]);
-    }
     fwrite(buffer, 1, bytes_read, file);
+  }
+
+  // Verify if the file was successfully downloaded.
+  response_code = 0;
+  memset(response, 0, sizeof(response));
+  if (read_response(socket_fd1, response, &response_code) != 0) {
+    return -1;
+  }
+
+  if (response_code != 226) {
+    perror("Error downloading the file.\n");
+
+    return -1;
   }
 
   // Close the file.
