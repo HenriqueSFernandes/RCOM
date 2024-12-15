@@ -13,6 +13,7 @@ typedef struct {
   char filename[1024];
   char passive_ip[256];
   int passive_port;
+  int file_size;
 } UrlInfo;
 
 enum state {
@@ -46,12 +47,16 @@ int send_message(const int socket_fd, const char *message);
 // Login function.
 int login(const int socket_fd, const UrlInfo *info);
 
+// Get file size.
+int get_file_size(const int socket_fd, UrlInfo *info);
+
 // Enter passive mode.
 int enter_passive_mode(const int socket_fd, UrlInfo *info);
 
 // Download the file.
-int download_file(const int socket_fd1, const int socket_fd2,
-                  const UrlInfo *info);
+int download_file(const int socket_fd1, const int socket_fd2, UrlInfo *info);
+
+void print_progress_bar(int progress, int total);
 
 // Close the connection.
 int close_connection(const int socket_fd1, const int socket_fd2);

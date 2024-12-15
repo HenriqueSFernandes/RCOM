@@ -28,6 +28,11 @@ void print_url_info(UrlInfo *info) {
   } else {
     printf("Passive Port: %d\n", info->passive_port);
   }
+  if (info->file_size == 0) {
+    printf("File Size   : N/A\n");
+  } else {
+    printf("File Size   : %d bytes\n", info->file_size);
+  }
   printf("=====================================\n");
 }
 
@@ -318,6 +323,34 @@ int login(const int socket_fd, const UrlInfo *info) {
   return 0;
 }
 
+int get_file_size(const int socket_fd, UrlInfo *info) {
+  if (info == NULL) {
+    return -1;
+  }
+
+  char retrieve[1024] = "SIZE ";
+  strcat(retrieve, info->path);
+  strcat(retrieve, "\r\n");
+  if (send_message(socket_fd, retrieve) != 0) {
+    return -1;
+  }
+
+  // Read the response.
+  char response[8192] = "";
+  int response_code = 0;
+  if (read_response(socket_fd, response, &response_code) != 0) {
+    return -1;
+  }
+
+  if (response_code != 213) {
+    perror("Error getting the file size.\n");
+    return -1;
+  }
+
+  info->file_size = atoi(response);
+  return 0;
+}
+
 int enter_passive_mode(const int socket_fd, UrlInfo *info) {
   if (info == NULL) {
     return -1;
@@ -354,8 +387,7 @@ int enter_passive_mode(const int socket_fd, UrlInfo *info) {
   return 0;
 }
 
-int download_file(const int socket_fd1, const int socket_fd2,
-                  const UrlInfo *info) {
+int download_file(const int socket_fd1, const int socket_fd2, UrlInfo *info) {
   if (info == NULL) {
     return -1;
   }
@@ -374,6 +406,12 @@ int download_file(const int socket_fd1, const int socket_fd2,
 
   if (response_code != 200) {
     perror("Error setting the FTP mode to binary.\n");
+    return -1;
+  }
+
+  if (get_file_size(socket_fd1, info) != 0) {
+    perror("Error getting the file size.\n");
+    close_connection(socket_fd1, -1);
     return -1;
   }
 
@@ -405,12 +443,16 @@ int download_file(const int socket_fd1, const int socket_fd2,
     return -1;
   }
 
+  printf("\nDownloading file...\n");
+
   // Read the file.
   char buffer[1024];
   int bytes_read;
   while ((bytes_read = read(socket_fd2, buffer, sizeof(buffer))) > 0) {
     fwrite(buffer, 1, bytes_read, file);
+    print_progress_bar(ftell(file), info->file_size);
   }
+  printf("\nDownload complete.\n");
 
   // Verify if the file was successfully downloaded.
   response_code = 0;
@@ -428,9 +470,23 @@ int download_file(const int socket_fd1, const int socket_fd2,
   // Close the file.
   fclose(file);
 
-  // Read the response.
-
   return 0;
+}
+
+void print_progress_bar(int progress, int total) {
+  int bar_width = 70;
+  float progress_ratio = (float)progress / total;
+  int bar_progress = bar_width * progress_ratio;
+  printf("\r[");
+  for (int i = 0; i < bar_width; i++) {
+    if (i < bar_progress) {
+      printf("=");
+    } else {
+      printf(" ");
+    }
+  }
+  printf("] %.2f%%", progress_ratio * 100);
+  fflush(stdout);
 }
 
 int close_connection(const int socket_fd1, const int socket_fd2) {

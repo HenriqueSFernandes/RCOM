@@ -58,6 +58,8 @@ int main(int argc, char *argv[]) {
 
   close_connection(socket1, socket2);
 
+  print_url_info(&info);
+
   print_statistics(&info, &start_time);
   return 0;
 }

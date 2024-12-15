@@ -13,15 +13,15 @@ BIN = bin/
 
 # PUBLIC SERVERS
 
-URL = ftp://ftp.scene.org/welcome.msg
-# URL = ftp://anonymous:anonymous@ftp.bit.nl/speedtest/100mb.bin
+# URL = ftp://ftp.scene.org/welcome.msg
+URL = ftp://anonymous:anonymous@ftp.bit.nl/speedtest/10mb.bin
 
 # LOCAL SERVER (READ README.md TO KNOW HOW TO SET UP THE SERVER)
 
 # FILE = penguin.gif
 # FILE = README.txt
 # FILE = Sebenta.pdf
-# FILE = 5mb.txt
+FILE = 5mb.txt
 # URL = ftp://user:12345@localhost:2121/$(FILE)
 
 .PHONY: all
