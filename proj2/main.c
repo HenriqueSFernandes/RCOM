@@ -26,7 +26,6 @@ int main(int argc, char *argv[]) {
 
   if (establish_connection(&info, &socket1) != 0) {
     perror("Error establishing connection.\n");
-    close_connection(socket1, -1);
     return -1;
   }
 
@@ -59,6 +58,6 @@ int main(int argc, char *argv[]) {
 
   close_connection(socket1, socket2);
 
-	print_statistics(&info, &start_time);
+  print_statistics(&info, &start_time);
   return 0;
 }

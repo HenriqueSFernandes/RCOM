@@ -23,7 +23,11 @@ void print_url_info(UrlInfo *info) {
   printf("Filename    : %s\n", strlen(info->filename) ? info->filename : "N/A");
   printf("Passive IP  : %s\n",
          strlen(info->passive_ip) ? info->passive_ip : "N/A");
-  printf("Passive Port: %d\n", info->passive_port);
+  if (info->passive_port == 0) {
+    printf("Passive Port: N/A\n");
+  } else {
+    printf("Passive Port: %d\n", info->passive_port);
+  }
   printf("=====================================\n");
 }
 
@@ -467,7 +471,7 @@ void print_statistics(const UrlInfo *info, struct timespec *start_time) {
   int size = ftell(fp);
 
   printf("\n========== Statistics ==========\n");
-  printf("Elapsed Time : %f seconds\n", elapsed_time);
+  printf("Elapsed Time : %.2f seconds\n", elapsed_time);
   printf("File Size    : %d bytes\n", size);
   printf("Transfer Rate: %.2f bytes/s\n", size / elapsed_time);
   printf("================================\n");
