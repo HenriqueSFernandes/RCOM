@@ -56,7 +56,7 @@ int enter_passive_mode(const int socket_fd, UrlInfo *info);
 // Download the file.
 int download_file(const int socket_fd1, const int socket_fd2, UrlInfo *info);
 
-void print_progress_bar(int progress, int total);
+void print_progress_bar(int progress, int total, struct timespec *start_time);
 
 // Close the connection.
 int close_connection(const int socket_fd1, const int socket_fd2);

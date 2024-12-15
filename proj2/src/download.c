@@ -444,13 +444,15 @@ int download_file(const int socket_fd1, const int socket_fd2, UrlInfo *info) {
   }
 
   printf("\nDownloading file...\n");
+  struct timespec start_time;
+  clock_gettime(CLOCK_MONOTONIC, &start_time);
 
   // Read the file.
   char buffer[1024];
   int bytes_read;
   while ((bytes_read = read(socket_fd2, buffer, sizeof(buffer))) > 0) {
     fwrite(buffer, 1, bytes_read, file);
-    print_progress_bar(ftell(file), info->file_size);
+    print_progress_bar(ftell(file), info->file_size, &start_time);
   }
   printf("\nDownload complete.\n");
 
@@ -473,10 +475,15 @@ int download_file(const int socket_fd1, const int socket_fd2, UrlInfo *info) {
   return 0;
 }
 
-void print_progress_bar(int progress, int total) {
-  int bar_width = 70;
+void print_progress_bar(int progress, int total, struct timespec *start_time) {
+  int bar_width = 50;
   float progress_ratio = (float)progress / total;
   int bar_progress = bar_width * progress_ratio;
+  struct timespec current_time;
+  clock_gettime(CLOCK_MONOTONIC, &current_time);
+  double elapsed_time = (current_time.tv_sec - start_time->tv_sec) +
+                        (current_time.tv_nsec - start_time->tv_nsec) / 1e9;
+  double remaining_time = elapsed_time / progress_ratio - elapsed_time;
   printf("\r[");
   for (int i = 0; i < bar_width; i++) {
     if (i < bar_progress) {
@@ -485,7 +492,8 @@ void print_progress_bar(int progress, int total) {
       printf(" ");
     }
   }
-  printf("] %.2f%%", progress_ratio * 100);
+  printf("] %.2f%% - Remaining Time: %.2f s", progress_ratio * 100,
+         remaining_time);
   fflush(stdout);
 }
 
